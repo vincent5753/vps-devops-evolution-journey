@@ -2,6 +2,7 @@
 resource "google_compute_address" "wg_ip" {
   name   = "wg-002-static-ip"
   region = var.region
+  network_tier = "STANDARD"
 }
 
 # WireGuard 防火牆規則（對應 allow-wireguard: udp/51820）
@@ -35,6 +36,7 @@ resource "google_compute_instance" "wg_vm" {
     network = "default"
     access_config {
       nat_ip = google_compute_address.wg_ip.address
+      network_tier = "STANDARD"
     }
   }
 
