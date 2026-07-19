@@ -1,0 +1,12 @@
+#cloud-config
+
+# 開機時更新 apt 套件索引（等同 apt-get update）
+package_update: true
+
+# 一併升級已安裝套件（可選；想加快開機、只裝 WireGuard 可移除這行）
+package_upgrade: true
+
+# 宣告要安裝的套件，cloud-init 會自動處理安裝
+packages:
+  - wireguard
+  - wireguard-tools

@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────
+# OpenTofu / Terraform
+# ─────────────────────────────────────────────
+
+# State 檔案：含專案 ID、實際配發的 IP、user-data 等敏感細節，絕不進版控
+# State files: contain project ID, provisioned IPs, user-data and other
+# sensitive details — must never be committed
+*.tfstate
+*.tfstate.*
+
+# Provider 外掛與本機快取：體積大且可透過 `tofu init` 重新下載
+# Provider plugins and local cache: large, and re-downloadable via `tofu init`
+.terraform/
+
+# 變數值檔案：屬環境特定內容，請改用 terraform.tfvars.example 作為範本
+# Variable value files: environment-specific — use terraform.tfvars.example
+# as a template instead
+*.tfvars
+
+# ─────────────────────────────────────────────
+# 注意 / Note
+# ─────────────────────────────────────────────
+# .terraform.lock.hcl 應「保留」並納入版控，以鎖定 provider 版本、確保可重現性
+# .terraform.lock.hcl should be KEPT and committed — it pins provider
+# versions to guarantee reproducible builds
