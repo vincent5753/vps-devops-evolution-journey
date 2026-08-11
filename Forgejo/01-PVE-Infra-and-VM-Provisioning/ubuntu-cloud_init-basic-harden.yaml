@@ -1,0 +1,135 @@
+#cloud-config
+# ============================================================
+#  ubuntu-cloud_init-basic-harden.yaml
+#  Place at:    /var/lib/vz/snippets/
+#  Permissions: chmod 644 / owner root:root
+#  Referenced by OpenTofu as:
+#               local:snippets/ubuntu-cloud_init-basic-harden.yaml
+# ============================================================
+#  ⚠ Change these before using it:
+#     1. users[0].ssh_authorized_keys  <- your own public keys (multiple ok)
+#     2. timezone / locale (if needed)
+#
+#  Account created: opentofu_adm
+#  Log in with:     ssh opentofu_adm@<vm-ip>
+# ============================================================
+
+# ---------- Host basics ----------
+timezone: Asia/Taipei
+locale: en_US.UTF-8
+
+# ---------- Users ----------
+# Note: once 'users' is defined, cloud-init no longer creates the
+# default 'ubuntu' account.
+users:
+  - name: opentofu_adm
+    gecos: "OpenTofu Automation Admin"
+    groups: [sudo, adm]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true          # no password login, keys only
+    ssh_authorized_keys:
+      # Each key must sit on exactly one line — no wrapping.
+      # Paste the whole line from ~/.ssh/id_ed25519.pub.
+      # The trailing comment is free-form; use it to label the machine.
+      - ssh-ed25519 AAAA_REPLACE_ME_KEY_A your@desktop
+      - ssh-ed25519 AAAA_REPLACE_ME_KEY_B your@laptop
+
+# ---------- SSH hardening ----------
+disable_root: true             # no direct root login
+ssh_pwauth: false              # password authentication off entirely
+
+ssh_deletekeys: true           # drop the image's baked-in host keys, regenerate
+ssh_genkeytypes: [ed25519, rsa]
+
+# ---------- Packages ----------
+package_update: true
+package_upgrade: true
+
+packages:
+  - qemu-guest-agent           # required, otherwise PVE cannot read the VM's IP
+  - unattended-upgrades
+  - fail2ban
+  - ufw
+  - chrony
+  - curl
+  - vim
+
+# ---------- Config files ----------
+write_files:
+  # Extra SSH hardening (overrides the defaults)
+  - path: /etc/ssh/sshd_config.d/99-harden.conf
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitEmptyPasswords no
+      X11Forwarding no
+      MaxAuthTries 3
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+
+  # Install security updates automatically
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  # fail2ban jail for sshd
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      findtime = 600
+      bantime  = 3600
+
+  # Kernel parameter hardening
+  # The 90- prefix makes these load after the distro defaults (10-*, 50-*),
+  # so these values win rather than being overridden.
+  - path: /etc/sysctl.d/90-bacsi-vm-hardening.conf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      # --- Network layer ---
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+      net.ipv4.tcp_syncookies = 1
+      # --- Kernel layer ---
+      kernel.randomize_va_space = 2
+      kernel.kptr_restrict = 2
+      kernel.dmesg_restrict = 1
+      # Value 1 is write-once: it cannot be relaxed again until reboot
+      kernel.unprivileged_bpf_disabled = 1
+      kernel.apparmor_restrict_unprivileged_userns = 1
+
+# ---------- Run on first boot ----------
+runcmd:
+  # QEMU guest agent (lets PVE read the IP and shut the VM down gracefully)
+  - [systemctl, enable, --now, qemu-guest-agent]
+
+  # Firewall: deny inbound by default, only SSH is open
+  - [ufw, default, deny, incoming]
+  - [ufw, default, allow, outgoing]
+  - [ufw, allow, "22/tcp"]
+  - [ufw, --force, enable]
+
+  - [systemctl, enable, --now, fail2ban]
+  - [sysctl, --system]
+  - [systemctl, restart, ssh]
+
+# ---------- Reboot when finished ----------
+# So the kernel updates take effect. Comment out the two lines below
+# if you would rather not reboot.
+power_state:
+  mode: reboot
+  delay: "+1"
+  message: "cloud-init finished, rebooting"
+
+final_message: "cloud-init finished after $UPTIME seconds"
