@@ -36,8 +36,10 @@ Release policy (version, GPG fingerprint, download source) is in [`../ansible/gr
 |---|---|---|
 | `forgejo_version` | `all/forgejo.yml` | 目前是 `15.0.6`（v15 LTS 軌）。留空的話 playbook 會直接中止。換版本前先到 <https://forgejo.org/releases> 確認支援期限 / Currently `15.0.6` on the v15 LTS track. Leaving it empty aborts the playbook. Check the support window at <https://forgejo.org/releases> before changing it |
 | `forgejo_static_ip` | `forgejo/main.yml` | **必須填目前這台機器已經在用的位址**，否則套用 netplan 會切斷 Ansible 自己的連線（playbook 有檢查會擋下來）/ **Must be the address the VM already holds**, otherwise applying netplan cuts Ansible's own connection (a guard task catches this) |
-| `forgejo_nic` | `forgejo/main.yml` | 用 `ip -br link` 確認。**這台實測是 `eth0`，不是 Proxmox 常見的 `ens18`** —— 別照抄，重建 VM 後要重新確認 / Confirm with `ip -br link`. **Measured as `eth0` on this VM, not the `ens18` you usually see on Proxmox** — do not assume, re-check after rebuilding the VM |
 | `forgejo_domain` | `forgejo/main.yml` | 純內網，預設 `git.home.arpa`（RFC 8375 保留給家用網路，不像 `.local` 會和 mDNS 衝突）/ Internal-only; defaults to `git.home.arpa` (RFC 8375 reserves it for home networks, unlike `.local` which collides with mDNS) |
+
+**沒有網卡名稱要填。** netplan 用 MAC 比對（取自 `ansible_default_ipv4.macaddress`），介面叫什麼都不影響——這一項曾經是 `forgejo_nic`，而它是這個階段最貴的一課，理由見「重開機才會浮現的兩件事」
+**There is no NIC name to fill in.** netplan matches on the MAC (taken from `ansible_default_ipv4.macaddress`), so the interface's name does not matter. This used to be a `forgejo_nic` variable, and removing it was the most expensive lesson of this stage — see "What only a reboot reveals".
 
 還有三件在機器外面要做的事
 Three more things to do outside the machine:
@@ -51,6 +53,12 @@ Secrets and the PVE token:
 
 ```bash
 cd ../ansible
+
+# 只有純 ansible-core 安裝才需要這行。Homebrew 的完整 `ansible` 套件已內附三個
+# collection,跑了反而會裝一份沒釘版本的到本機目錄並優先生效
+# Only needed on a bare ansible-core install. The full Homebrew `ansible`
+# package already bundles all three; running this shadows them with unpinned
+# copies in a local directory
 ansible-galaxy collection install -r requirements.yml -p collections
 
 # 唯讀 inventory token,存進 Keychain 而不是環境變數
@@ -201,6 +209,38 @@ ansible-playbook site.yml                            # 還原 / restore
 
 若某項功能測試失敗，一次只放寬一個 unit 指令再重測。被擋掉的系統呼叫在 journal 裡是 `EPERM` 而不是啟動失敗，常見嫌疑犯是 `SystemCallFilter` 和 `RestrictNamespaces`
 If a functional test fails, relax one unit directive at a time and re-test. Denied syscalls show up in the journal as `EPERM`, not as a startup failure; the usual suspects are `SystemCallFilter` and `RestrictNamespaces`.
+
+## 重開機才會浮現的兩件事 (What only a reboot reveals)
+
+這個階段宣告完成、commit 之後才做的重開機驗證，**一次抓到兩個之前所有測試都看不到的問題**。兩者的共同性質是:先前的「驗證通過」量到的是**當下執行順序造成的暫時狀態**，不是穩態
+The reboot test — run after this stage was declared done and committed — found two bugs that every earlier check had missed. Both share a shape: the earlier "verified" state was an artefact of the order things happened in that session, not the steady state.
+
+**1. 網卡名稱 `eth0` 從來不是我們的**
+
+cloud-init 產生的 `50-cloud-init.yaml` 帶有 `set-name: eth0`，把核心給的 `ens18` 改名。而本階段的 role 停用 cloud-init 網路管理**並刪掉那個檔案**。改名在重開機前仍然有效，所以一切看起來正常——直到重開機，介面變回 `ens18`，netplan 設定的是一個不存在的介面，**機器沒有任何 IP、完全失聯**
+cloud-init's generated `50-cloud-init.yaml` carries `set-name: eth0`, renaming the kernel's `ens18` — and this role disables cloud-init networking **and deletes that file**. The rename survives until the next reboot, at which point netplan is configuring an interface that no longer exists and the host comes up with no address at all.
+
+現在改用 MAC 比對，key 固定為 `primary`，**刻意不加 `set-name`**——重新命名正是問題的來源
+It now matches on the MAC with a fixed `primary` key, and deliberately does **not** set a name: renaming is what caused this.
+
+**2. `disable_ipv6` 這個 sysctl 擋不住 systemd-networkd**
+
+重開機後實測 `all=1`、`default=1`，但**介面層是 `0`**。netplan 預設產生 `LinkLocalAddressing=ipv6`，networkd 為了給介面 link-local 位址，會直接把該介面的 `disable_ipv6` 寫成 0 蓋過 sysctl；接著它接受 RA 並取得 DHCPv6 位址——即使 netplan 寫著 `dhcp6: false`（那只關主動請求，RA 的 managed flag 仍會觸發）
+Measured after boot: `all=1`, `default=1`, but the **per-interface value was `0`**. netplan defaults to `LinkLocalAddressing=ipv6`, and to grant a link-local address systemd-networkd writes 0 into that interface's `disable_ipv6`, overriding the sysctl. It then honours router advertisements and takes a DHCPv6 lease — despite `dhcp6: false`, which only stops the active request, not an RA carrying the managed flag.
+
+先前看起來有效，是因為 sysctl 是在 netplan **之後**套用的;開機時 networkd 跑在 `systemd-sysctl` 之後，順序反過來就輸了。修法是在 netplan 加 `accept-ra: false` 與 `link-local: []`，**sysctl 保留——兩層一起才成立**
+It only appeared to work because the sysctl was applied *after* netplan in the same session; on boot, networkd runs after `systemd-sysctl` and wins. The fix adds `accept-ra: false` and `link-local: []` to netplan; **the sysctl stays, because it takes both layers**.
+
+> **方法論**:任何「只在開機時發生的事」——介面改名、sysctl 與 networkd 的先後、cloud-init 的 one-shot 行為——**在重開機之前的驗證都不算數**。Stage 03 動完防火牆與 nginx 之後，一樣要再重開機驗證一次
+> **The rule this leaves behind**: anything that only happens at boot — interface renaming, the ordering between sysctl and networkd, cloud-init's one-shot behaviour — **is not verified until you have rebooted**. Stage 03 will need the same treatment after it touches the firewall and nginx.
+
+驗收指令 / Verify with:
+
+```bash
+ip -6 addr | grep -c inet6          # 必須是 0 / must be 0
+sysctl net.ipv6.conf.all.disable_ipv6 net.ipv6.conf.default.disable_ipv6
+ip -br addr                         # 靜態位址要在,不論介面叫什麼 / address present, whatever the name
+```
 
 ## 已知的刻意取捨 (Deliberate trade-offs)
 
