@@ -10,6 +10,15 @@
       Ansible is connected on ({{ ansible_host }}). Applying it would cut
       this connection. Pin the current address, or change it out of band.
 
+- name: A default route must exist, since netplan matches on its MAC
+  ansible.builtin.assert:
+    that:
+      - ansible_default_ipv4.macaddress is defined
+      - ansible_default_ipv4.macaddress | length > 0
+    fail_msg: >-
+      No default IPv4 route, so there is no MAC to write into the netplan
+      match block. Fix routing before running this role.
+
 - name: Stop cloud-init from managing the network
   # Otherwise cloud-init regenerates 50-cloud-init.yaml from main.tf's
   # ip_config ("dhcp") on the next boot. Worked-until-I-rebooted.

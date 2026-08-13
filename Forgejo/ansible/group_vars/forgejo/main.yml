@@ -17,7 +17,6 @@ forgejo_root_url: "https://{{ forgejo_domain }}/"
 
 # Pins the address the VM already holds, so netplan apply does not drop the
 # SSH connection Ansible runs over. Reserve it on the DHCP server too.
-forgejo_nic: eth0
 forgejo_static_ip: 192.168.1.192/24
 forgejo_gateway: 192.168.1.1
 forgejo_dns_servers:

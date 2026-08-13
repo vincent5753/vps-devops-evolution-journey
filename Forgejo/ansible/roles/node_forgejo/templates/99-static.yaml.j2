@@ -4,9 +4,26 @@
 network:
   version: 2
   ethernets:
-    {{ forgejo_nic }}:
+    primary:
+      # Matched by MAC, not by name. This used to key on eth0, but that name
+      # only existed because cloud-init's 50-cloud-init.yaml renamed ens18 --
+      # and this role deletes that file. The rename survived until the next
+      # reboot, at which point netplan configured an interface that was gone.
+      # With a match block the key is just an identifier and no name matters.
+      match:
+        macaddress: {{ ansible_default_ipv4.macaddress }}
       dhcp4: false
       dhcp6: false
+
+      # These two are what actually keep IPv6 off; the disable_ipv6 sysctl in
+      # the 90- baseline is not enough on its own. netplan defaults to
+      # LinkLocalAddressing=ipv6, and to grant a link-local address networkd
+      # writes 0 into that interface's disable_ipv6, overriding the sysctl.
+      # It then honours router advertisements and can take a DHCPv6 lease.
+      # Order decides the winner, so this only shows up after a reboot.
+      accept-ra: false
+      link-local: []
+
       addresses:
         - {{ forgejo_static_ip }}
       routes:
