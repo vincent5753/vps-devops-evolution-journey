@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Baseline kernel hardening, all nodes. MUST stay identical to the write_files
+# block of the same name in ubuntu-cloud_init-basic-harden.yaml. 90- loads
+# after the distro defaults; node roles override in 95-node-role.conf.
+
+# --- Network layer ---
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.tcp_syncookies = 1
+
+# IPv6 off by default because this LAN gets globally routable SLAAC addresses
+# and the router does not filter inbound v6 — and there is no v6 NAT to hide
+# behind. Belongs here, not in a node role: the exposure starts at boot, long
+# before Ansible first connects. A node that genuinely needs v6 sets these to
+# 0 in 95-node-role.conf, which is a deliberate, reviewable act. Reversible.
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+
+# --- Kernel layer ---
+kernel.randomize_va_space = 2
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+
+# kernel.unprivileged_bpf_disabled deliberately unset, left at the distro
+# default (2). Writing 1 is one-way and later sysctl.d files then override
+# it silently. Check with: sysctl kernel.unprivileged_bpf_disabled

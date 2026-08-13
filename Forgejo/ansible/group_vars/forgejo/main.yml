@@ -1,0 +1,76 @@
+---
+# Secrets live in vault.yml (ansible-vault, gitignored) beside this file.
+
+# Release policy (version, GPG fingerprint, download source) lives in
+# group_vars/all/forgejo.yml: it is a product-level fact, not a host property.
+
+# ---------- Identity / addressing ----------
+
+# Internal only. .home.arpa is reserved for home networks by RFC 8375;
+# .local would collide with mDNS. Something must resolve this name.
+forgejo_domain: git.home.arpa
+
+# LFS returns absolute upload URLs built from ROOT_URL, so until Stage 3 serves
+# TLS this value decides whether LFS works at all. Override for a local test:
+#   -e forgejo_root_url=http://127.0.0.1:3000/   (needs an SSH tunnel)
+forgejo_root_url: "https://{{ forgejo_domain }}/"
+
+# Pins the address the VM already holds, so netplan apply does not drop the
+# SSH connection Ansible runs over. Reserve it on the DHCP server too.
+forgejo_nic: eth0
+forgejo_static_ip: 192.168.1.192/24
+forgejo_gateway: 192.168.1.1
+forgejo_dns_servers:
+  - 192.168.1.1
+
+# ---------- Service account and paths ----------
+
+# /bin/bash, not nologin: Stage 3's host sshd runs the AuthorizedKeysCommand
+# forced command through this account's login shell, so nologin breaks every
+# SSH clone while the web UI keeps working.
+forgejo_user: git
+forgejo_group: git
+forgejo_shell: /bin/bash
+
+# home MUST be /var/lib/forgejo: the unit sets ProtectHome=yes, which hides
+# /home. With /home/git the service starts fine and the first push fails.
+forgejo_home: /var/lib/forgejo
+forgejo_log_dir: /var/log/forgejo
+forgejo_conf_dir: /etc/forgejo
+forgejo_config: /etc/forgejo/app.ini
+forgejo_bin_dir: /usr/local/bin
+
+# MEASURED here: /tmp is NOT tmpfs on this image, and /var/lib/forgejo is on
+# the same filesystem, so this redirect frees no capacity today. Kept because
+# the distro default for /tmp is drifting toward tmpfs. Recheck: findmnt /tmp
+forgejo_tmp: /var/lib/forgejo/tmp
+
+# ---------- Node role sysctl ----------
+
+# Written to 95-node-role.conf, which sorts after the 90- baseline. One
+# canonical filename per node so two role files cannot silently coexist.
+forgejo_role_sysctl:
+  # Already the Ubuntu 24.04 default; Stage 7's runner sets it to 0 for DinD.
+  kernel.apparmor_restrict_unprivileged_userns: "1"
+
+  # disable_ipv6 is NOT here: an unsafe default has to be fixed at boot, not
+  # whenever Ansible next runs, so it lives in the 90- baseline instead.
+
+# ---------- Database (co-located) ----------
+
+# TCP loopback rather than a unix socket: moving PostgreSQL to its own host
+# later becomes a one-variable change, and it sidesteps any question about
+# socket access under ProtectSystem=strict.
+forgejo_db_host: 127.0.0.1
+forgejo_db_port: 5432
+forgejo_db_name: forgejo
+forgejo_db_user: forgejo
+# forgejo_db_password -> vault.yml
+
+# ---------- Application ----------
+forgejo_app_name: "Forgejo"
+forgejo_http_addr: 127.0.0.1            # loopback only until Stage 3's proxy
+forgejo_http_port: 3000
+forgejo_ssh_port: 2222                  # must match the host sshd in Stage 3
+forgejo_disable_registration: true
+forgejo_lfs_enabled: true

@@ -1,0 +1,13 @@
+---
+# Manages the SAME file the Stage 01 cloud-init snippet writes: cloud-init
+# hardens before Ansible can reach the host, this enforces it afterwards.
+# Duplication is fine BECAUSE the values are identical. Grows in Stage 6.
+
+- name: Baseline kernel hardening
+  ansible.builtin.template:
+    src: 90-bacsi-vm-hardening.conf.j2
+    dest: /etc/sysctl.d/90-bacsi-vm-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl

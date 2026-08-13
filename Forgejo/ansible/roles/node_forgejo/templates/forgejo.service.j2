@@ -1,0 +1,69 @@
+; {{ ansible_managed }}
+; Stage 2 sandbox, path A; replaced by a Pod securityContext in Stage 8.
+; If a functional test fails, relax ONE directive at a time: denied syscalls
+; surface as EPERM in the journal, not as a startup failure.
+[Unit]
+Description=Forgejo
+Documentation=https://forgejo.org/docs/
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User={{ forgejo_user }}
+Group={{ forgejo_group }}
+WorkingDirectory={{ forgejo_home }}
+ExecStart={{ forgejo_bin_dir }}/forgejo web --config {{ forgejo_config }}
+Restart=always
+RestartSec=5s
+
+Environment=USER={{ forgejo_user }}
+Environment=HOME={{ forgejo_home }}
+Environment=FORGEJO_WORK_DIR={{ forgejo_home }}
+
+; PrivateTmp bind mounts a private subdirectory of the HOST's /tmp rather
+; than creating a fresh tmpfs. On this image that is disk, not RAM.
+; Redirected anyway so temp data sits beside the repositories.
+Environment=TMPDIR={{ forgejo_tmp }}
+
+; ---------- Filesystem ----------
+ProtectSystem=strict
+ReadWritePaths={{ forgejo_home }} {{ forgejo_log_dir }}
+; Safe only because the git account's home is {{ forgejo_home }}. With
+; /home/git this hides $HOME and the first push fails while the service
+; itself looks perfectly healthy.
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+UMask=0027
+
+; ---------- Privileges ----------
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+
+; ---------- Kernel ----------
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+; Fine for a pure-Go build; needs re-testing if a future path enables cgo.
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+
+; ---------- Syscalls and sockets ----------
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

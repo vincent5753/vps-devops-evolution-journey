@@ -1,0 +1,9 @@
+# Break-glass only: ansible-playbook -i inventory/static.yml site.yml
+# For when the PVE API is unreachable but the VMs are still up.
+# Group names must match the dynamic inventory so one group_vars serves both.
+---
+forgejo:
+  hosts:
+    forgejo-01:
+      # Keep in sync with forgejo_static_ip in group_vars/forgejo/main.yml
+      ansible_host: 192.168.1.192

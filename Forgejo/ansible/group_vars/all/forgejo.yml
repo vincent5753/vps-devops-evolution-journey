@@ -1,0 +1,20 @@
+---
+# Forgejo release policy. Here rather than in group_vars/forgejo/ because it is
+# a product-level fact, not a property of one host: Stage 07's runner and any
+# later node that verifies a Forgejo artefact read the same values.
+
+# v15 LTS, checked at forgejo.org/releases on 2026-08-13. Not "latest": the
+# general stable release goes EOL inside this project's timeline. Stage 10's
+# Renovate must be constrained to 15.0.x patches.
+forgejo_version: "15.0.6"
+
+# Pin the PRIMARY key fingerprint and fetch the key at run time: the signing
+# subkey rotates yearly, so a pinned keyfile fails at an unpredictable moment.
+# Verified 2026-08-13: two signing subkeys, expiring 2027-01-10 and 2027-06-09.
+forgejo_gpg_fingerprint: "EB114F5E6C0DC2BCDD183550A4B61A2DC5923710"
+
+# The keyserver and the download source stay beside the fingerprint: the
+# fingerprint is the trust anchor for exactly these artefacts, and separating
+# them lets one change without the other being reconsidered.
+forgejo_keyserver: "hkps://keys.openpgp.org"
+forgejo_download_base: "https://codeberg.org/forgejo/forgejo/releases/download"

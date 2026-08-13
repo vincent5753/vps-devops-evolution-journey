@@ -1,0 +1,40 @@
+---
+- name: The static address must be the one we are connected on
+  # Pinning the current address is what keeps netplan apply from cutting
+  # the SSH connection this playbook runs over.
+  ansible.builtin.assert:
+    that:
+      - forgejo_static_ip.split('/')[0] == ansible_host
+    fail_msg: >-
+      forgejo_static_ip ({{ forgejo_static_ip }}) does not match the address
+      Ansible is connected on ({{ ansible_host }}). Applying it would cut
+      this connection. Pin the current address, or change it out of band.
+
+- name: Stop cloud-init from managing the network
+  # Otherwise cloud-init regenerates 50-cloud-init.yaml from main.tf's
+  # ip_config ("dhcp") on the next boot. Worked-until-I-rebooted.
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    # Not {{ ansible_managed }}: only the template module injects it, so in a
+    # copy content block it is undefined and the task fails outright.
+    content: |
+      # {{ lookup('ansible.builtin.config', 'DEFAULT_MANAGED_STR') }}
+      network: {config: disabled}
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Static network configuration
+  ansible.builtin.template:
+    src: 99-static.yaml.j2
+    dest: /etc/netplan/99-static.yaml
+    owner: root
+    group: root
+    mode: "0600"     # netplan warns loudly about world-readable configs
+  notify: Apply netplan
+
+- name: Drop the DHCP configuration cloud-init left behind
+  ansible.builtin.file:
+    path: /etc/netplan/50-cloud-init.yaml
+    state: absent
+  notify: Apply netplan

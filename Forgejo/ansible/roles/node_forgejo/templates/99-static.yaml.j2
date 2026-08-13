@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+# Pins the address the VM already holds, so netplan apply does not drop the
+# SSH session. Reserve or exclude this address on the DHCP server too.
+network:
+  version: 2
+  ethernets:
+    {{ forgejo_nic }}:
+      dhcp4: false
+      dhcp6: false
+      addresses:
+        - {{ forgejo_static_ip }}
+      routes:
+        - to: default
+          via: {{ forgejo_gateway }}
+      nameservers:
+        addresses:
+{% for ns in forgejo_dns_servers %}
+          - {{ ns }}
+{% endfor %}

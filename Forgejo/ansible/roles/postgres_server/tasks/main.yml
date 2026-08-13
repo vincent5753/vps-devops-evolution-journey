@@ -1,0 +1,46 @@
+---
+# Co-located with Forgejo on purpose: separating the database without also
+# replicating it puts two single points of failure in series. Stage 8
+# separates them for real via CloudNativePG.
+
+- name: Install PostgreSQL
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      - python3-psycopg2        # required by the community.postgresql modules
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable and start PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+
+# Nothing touches pg_hba.conf or listen_addresses: Ubuntu already binds
+# 127.0.0.1 and requires scram-sha-256 over TCP, which is what app.ini uses.
+# Editing them would hardcode a version-specific path for no gain.
+
+- name: Create the Forgejo database role
+  community.postgresql.postgresql_user:
+    name: "{{ forgejo_db_user }}"
+    password: "{{ forgejo_db_password }}"
+    role_attr_flags: NOSUPERUSER,NOCREATEDB,NOCREATEROLE
+    state: present
+  become: true
+  become_user: postgres
+  no_log: true
+
+# Forgejo creates its own schema on first start against an empty database.
+- name: Create the Forgejo database
+  community.postgresql.postgresql_db:
+    name: "{{ forgejo_db_name }}"
+    owner: "{{ forgejo_db_user }}"
+    encoding: UTF-8
+    lc_collate: C
+    lc_ctype: C
+    template: template0
+    state: present
+  become: true
+  become_user: postgres

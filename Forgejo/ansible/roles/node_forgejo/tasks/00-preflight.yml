@@ -1,0 +1,31 @@
+---
+# Fail early and loudly rather than half-configuring the host.
+
+- name: A Forgejo version must be pinned
+  ansible.builtin.assert:
+    that:
+      - forgejo_version | length > 0
+    fail_msg: >-
+      forgejo_version is empty. Pick a version off the v15 LTS track at
+      https://forgejo.org/releases and set it in group_vars/all/forgejo.yml.
+
+- name: The database password must come from the vault
+  ansible.builtin.assert:
+    that:
+      - forgejo_db_password is defined
+      - forgejo_db_password | length > 0
+      - forgejo_db_password != "replace-me"
+    fail_msg: >-
+      forgejo_db_password is unset or still the placeholder. Create it with
+      `ansible-vault create group_vars/forgejo/vault.yml` and run with
+      --ask-vault-pass.
+
+# Release verification runs on the control node, so managed nodes need
+# neither gpg nor keyserver access. On macOS: brew install gnupg
+- name: GnuPG must be available on the control node
+  ansible.builtin.command: gpg --version
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: forgejo_gpg_present
+  failed_when: forgejo_gpg_present.rc != 0

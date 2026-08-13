@@ -18,6 +18,65 @@
 *.tfvars
 
 # ─────────────────────────────────────────────
+# Ansible
+# ─────────────────────────────────────────────
+
+# Galaxy 下載的 collection：可透過 requirements.yml 重新安裝
+# Collections downloaded by Galaxy: reinstallable from requirements.yml
+collections/
+
+# Vault 密碼：寬鬆比對而非逐一列舉，列舉遲早會漏一個
+# Vault passwords: matched broadly — an enumerated list eventually misses one
+*vault*pass*
+*vault*pw*
+*vault*secret*
+*vault*key*
+
+# 通用密碼與私鑰。刻意不排除 *.pem：階段 3 的 CA 公開憑證要進版控
+# Passwords and private keys. *.pem stays allowed: Stage 3's CA public
+# certificate belongs in version control. Name private keys .key
+.pass
+.password
+*_password
+*.key
+*-key.pem
+*_key.pem
+id_rsa
+id_ed25519
+
+# -v 等級夠高時，未加 no_log 的 task 會把變數印進日誌
+# At high -v levels, tasks without no_log print their variables into the log
+ansible.log
+*.log
+
+*.retry
+
+# vault.yml 加密過也不進版控：git 歷史永久，輪替密碼救不回已推送的密文
+# vault.yml stays out even encrypted: git history is permanent, so rotating
+# the password does not help ciphertext that was already pushed
+# 尾綴萬用字元是必要的:rekey 或編輯時留下的 vault.yml.bak / .orig 一樣是密文
+# The trailing glob matters: a vault.yml.bak or .orig left by a rekey is ciphertext too
+vault.yml*
+.env
+
+# ─────────────────────────────────────────────
+# 作業系統與工作用檔案 / OS and working files
+# ─────────────────────────────────────────────
+
+# 全域 gitignore 擋得住，但那是本機設定，不會跟著 clone 走
+# The global gitignore catches these, but it does not travel with a clone
+.DS_Store
+
+# LLM 交接筆記：記的是當下還沒定案的事，會過期，不該被版控背書
+# Handoff notes: they record what was undecided at the time and go stale
+HANDOFF.md
+
+# 範例檔放行，它們只描述要填什麼。必須排在所有排除規則之後才生效
+# Examples stay allowed; they only describe what to fill in.
+# Must come after every exclude rule above to take effect
+!*.example
+
+# ─────────────────────────────────────────────
 # 注意 / Note
 # ─────────────────────────────────────────────
 # .terraform.lock.hcl 應「保留」並納入版控，以鎖定 provider 版本、確保可重現性

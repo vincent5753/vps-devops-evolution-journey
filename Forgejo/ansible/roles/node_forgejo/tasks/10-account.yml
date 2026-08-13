@@ -1,0 +1,56 @@
+---
+- name: Service group
+  ansible.builtin.group:
+    name: "{{ forgejo_group }}"
+    system: true
+    state: present
+
+- name: Service account
+  # shell and home are both load-bearing; see group_vars/forgejo/main.yml.
+  # nologin breaks Stage 3's SSH; /home/git breaks ProtectHome=yes.
+  ansible.builtin.user:
+    name: "{{ forgejo_user }}"
+    group: "{{ forgejo_group }}"
+    home: "{{ forgejo_home }}"
+    shell: "{{ forgejo_shell }}"
+    system: true
+    create_home: true
+    password_lock: true
+    state: present
+
+- name: Data and log directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ forgejo_user }}"
+    group: "{{ forgejo_group }}"
+    mode: "0750"
+  loop:
+    - "{{ forgejo_home }}"
+    - "{{ forgejo_home }}/home"           # [git] HOME_PATH
+    - "{{ forgejo_home }}/data"
+    - "{{ forgejo_home }}/repositories"
+    # Not {{ forgejo_tmp }}/uploads: Forgejo deletes it on every start and
+    # recreates it on demand, so managing it here reports changed forever.
+    # This parent must exist and be git-owned for that recreation to work.
+    - "{{ forgejo_tmp }}"
+    - "{{ forgejo_log_dir }}"
+
+- name: Configuration directory
+  # root-owned, group-readable: the service reads app.ini, never rewrites it.
+  ansible.builtin.file:
+    path: "{{ forgejo_conf_dir }}"
+    state: directory
+    owner: root
+    group: "{{ forgejo_group }}"
+    mode: "0750"
+
+- name: Node-role sysctl overrides
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/95-node-role.conf
+    sysctl_set: true
+    reload: true
+    state: present
+  loop: "{{ forgejo_role_sysctl | dict2items }}"

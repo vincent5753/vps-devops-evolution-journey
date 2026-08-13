@@ -1,0 +1,10 @@
+---
+# Stage 02 — Forgejo host prerequisites + systemd sandbox
+#     ansible-playbook site.yml --ask-vault-pass
+# Idempotency is an acceptance criterion: run three times, 2nd/3rd changed=0.
+- name: Forgejo host
+  hosts: forgejo
+  roles:
+    - common_baseline
+    - postgres_server
+    - node_forgejo

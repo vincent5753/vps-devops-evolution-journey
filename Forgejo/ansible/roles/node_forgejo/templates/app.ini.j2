@@ -1,0 +1,77 @@
+; {{ ansible_managed }}
+; root-owned, git-group readable: the service reads it, never rewrites it.
+
+APP_NAME = {{ forgejo_app_name }}
+RUN_USER = {{ forgejo_user }}
+RUN_MODE = prod
+WORK_PATH = {{ forgejo_home }}
+
+[server]
+PROTOCOL  = http
+; Loopback only; nothing is reachable from the network until Stage 3.
+HTTP_ADDR = {{ forgejo_http_addr }}
+HTTP_PORT = {{ forgejo_http_port }}
+
+DOMAIN     = {{ forgejo_domain }}
+; Already the final internal URL: ROOT_URL is baked into clone URLs, webhook
+; payloads and avatar links, so setting it once beats rewriting them later.
+; The clone URL shown in the UI simply does not work until Stage 3.
+ROOT_URL   = {{ forgejo_root_url }}
+SSH_DOMAIN = {{ forgejo_domain }}
+
+; Stage 3 uses the host's OpenSSH, so the built-in Go server stays off.
+START_SSH_SERVER = false
+; Critical: left on, Forgejo keeps maintaining ~/.ssh/authorized_keys next to
+; AuthorizedKeysCommand. Adding a key works through both paths, but REVOKING
+; only takes effect on one — a silent failure of key revocation.
+SSH_CREATE_AUTHORIZED_KEYS_FILE = false
+SSH_PORT = {{ forgejo_ssh_port }}
+
+APP_DATA_PATH = {{ forgejo_home }}/data
+LFS_START_SERVER = {{ forgejo_lfs_enabled | lower }}
+LFS_JWT_SECRET = {{ forgejo_lfs_jwt_secret }}
+
+[database]
+DB_TYPE  = postgres
+HOST     = {{ forgejo_db_host }}:{{ forgejo_db_port }}
+NAME     = {{ forgejo_db_name }}
+USER     = {{ forgejo_db_user }}
+PASSWD   = {{ forgejo_db_password }}
+; Loopback on the same host; the one variable to change if it ever moves.
+SSL_MODE = disable
+
+[git]
+; Set explicitly: with ProtectHome=yes an inferred /home/git is invisible.
+HOME_PATH = {{ forgejo_home }}/home
+
+[repository]
+ROOT = {{ forgejo_home }}/repositories
+
+[repository.upload]
+TEMP_PATH = {{ forgejo_tmp }}/uploads
+
+[lfs]
+PATH = {{ forgejo_home }}/data/lfs
+
+[security]
+; No installer wizard: app.ini is written by Ansible. Without this the
+; install page is served to anyone who can reach the port.
+INSTALL_LOCK   = true
+SECRET_KEY     = {{ forgejo_secret_key }}
+INTERNAL_TOKEN = {{ forgejo_internal_token }}
+; Without these Forgejo sees every connection as 127.0.0.1 once Nginx is in
+; front: login lockout treats all users as one source and the audit trail
+; records the loopback. LIMIT is trusted proxy hops — one Nginx means 1.
+REVERSE_PROXY_TRUSTED_PROXIES = 127.0.0.1/32
+REVERSE_PROXY_LIMIT = 1
+
+[oauth2]
+JWT_SECRET = {{ forgejo_jwt_secret }}
+
+[service]
+DISABLE_REGISTRATION = {{ forgejo_disable_registration | lower }}
+
+[log]
+MODE      = file
+LEVEL     = info
+ROOT_PATH = {{ forgejo_log_dir }}

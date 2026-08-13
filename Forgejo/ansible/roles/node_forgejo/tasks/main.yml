@@ -1,0 +1,7 @@
+---
+- ansible.builtin.import_tasks: 00-preflight.yml
+- ansible.builtin.import_tasks: 05-network.yml
+- ansible.builtin.import_tasks: 10-account.yml
+- ansible.builtin.import_tasks: 20-install.yml
+- ansible.builtin.import_tasks: 30-config.yml
+- ansible.builtin.import_tasks: 40-service.yml

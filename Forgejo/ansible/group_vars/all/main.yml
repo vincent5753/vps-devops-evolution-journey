@@ -1,0 +1,5 @@
+---
+# Applies to every node regardless of role.
+# The admin account is created by the Stage 01 cloud-init snippet.
+ansible_user: opentofu_adm
+ansible_python_interpreter: /usr/bin/python3

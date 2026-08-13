@@ -1,0 +1,13 @@
+#!/bin/sh
+# cp to bin/vault-pass.sh, chmod 700, then set vault_password_file in ansible.cfg
+# Print the password to stdout and NOTHING else: Ansible takes all of stdout,
+# so a stray echo yields "Decryption failed" and sends you to the wrong file.
+set -eu
+
+# macOS Keychain. Store it once with:
+#   security add-generic-password -a "$USER" -s forgejo-ansible-vault -w
+exec security find-generic-password -a "$USER" -s forgejo-ansible-vault -w
+
+# exec op read "op://Private/forgejo-ansible-vault/password"
+# exec pass show forgejo/ansible-vault
+# exec bw get password forgejo-ansible-vault --raw

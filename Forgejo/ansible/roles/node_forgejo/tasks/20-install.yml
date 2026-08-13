@@ -1,0 +1,109 @@
+---
+# Trust anchor is the PRIMARY key fingerprint in group_vars; the key is
+# fetched at run time so yearly subkey rotation stays transparent. The
+# unsigned .sha256 is not compared: it detects truncation, not tampering.
+
+- name: Is this version already installed?
+  ansible.builtin.stat:
+    path: "{{ forgejo_bin_dir }}/forgejo-{{ forgejo_version }}"
+  register: forgejo_binary
+
+- name: Download, verify and install
+  when: not forgejo_binary.stat.exists
+  block:
+    - name: Staging directory on the control node
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: forgejo
+      register: forgejo_stage
+      delegate_to: localhost
+      become: false
+
+    - name: Isolated GnuPG home on the control node
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: gnupg
+      register: forgejo_gnupg
+      delegate_to: localhost
+      become: false
+
+    - name: Fetch the binary and its detached signature
+      ansible.builtin.get_url:
+        url: "{{ forgejo_download_base }}/v{{ forgejo_version }}/{{ item }}"
+        dest: "{{ forgejo_stage.path }}/{{ item }}"
+        mode: "0644"
+      loop:
+        - "forgejo-{{ forgejo_version }}-linux-amd64"
+        - "forgejo-{{ forgejo_version }}-linux-amd64.asc"
+      delegate_to: localhost
+      become: false
+
+    - name: Import the release key by its pinned primary fingerprint
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --batch
+          - --keyserver
+          - "{{ forgejo_keyserver }}"
+          - --recv-keys
+          - "{{ forgejo_gpg_fingerprint }}"
+      environment:
+        GNUPGHOME: "{{ forgejo_gnupg.path }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify the detached signature
+      # VALIDSIG reports the signing subkey first and the primary key last.
+      # Requiring OUR pinned primary to appear is what survives rotation.
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --batch
+          - --status-fd
+          - "1"
+          - --verify
+          - "forgejo-{{ forgejo_version }}-linux-amd64.asc"
+          - "forgejo-{{ forgejo_version }}-linux-amd64"
+        chdir: "{{ forgejo_stage.path }}"
+      environment:
+        GNUPGHOME: "{{ forgejo_gnupg.path }}"
+      register: forgejo_verify
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: >-
+        forgejo_verify.rc != 0
+        or ('VALIDSIG' not in forgejo_verify.stdout)
+        or (forgejo_gpg_fingerprint not in forgejo_verify.stdout)
+
+    - name: Install the verified binary under its version
+      ansible.builtin.copy:
+        src: "{{ forgejo_stage.path }}/forgejo-{{ forgejo_version }}-linux-amd64"
+        dest: "{{ forgejo_bin_dir }}/forgejo-{{ forgejo_version }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+  always:
+    - name: Clean up the control node
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ forgejo_stage.path | default('', true) }}"
+        - "{{ forgejo_gnupg.path | default('', true) }}"
+      when: item | length > 0
+      delegate_to: localhost
+      become: false
+
+- name: Point the forgejo symlink at this version
+  # Versioned file plus symlink: rollback is a symlink flip, which Stage 4's
+  # rollback procedure and Stage 10's Renovate both depend on.
+  ansible.builtin.file:
+    src: "{{ forgejo_bin_dir }}/forgejo-{{ forgejo_version }}"
+    dest: "{{ forgejo_bin_dir }}/forgejo"
+    state: link
+    owner: root
+    group: root
+  notify: Restart forgejo

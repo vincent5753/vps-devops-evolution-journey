@@ -1,0 +1,11 @@
+# Never fill this one in. Create the encrypted file directly with
+#     ansible-vault create group_vars/forgejo/vault.yml
+# and run playbooks with --ask-vault-pass.
+
+# vault.yml is gitignored even encrypted, so a clean clone does NOT carry
+# the secrets — recreate it or move it in out of band.
+
+# Forgejo's SECRET_KEY / INTERNAL_TOKEN / JWT_SECRET / LFS_JWT_SECRET are not
+# here: they are generated on the target and never reach the control node.
+---
+forgejo_db_password: "replace-me"

@@ -1,0 +1,65 @@
+---
+# The four Forgejo secrets are generated on the target once and read back from
+# app.ini afterwards, so they never reach the control node. Regenerating them
+# would invalidate every session, token and 2FA enrolment on each run.
+
+- name: Is there an existing app.ini?
+  ansible.builtin.stat:
+    path: "{{ forgejo_config }}"
+  register: forgejo_appini
+
+- name: Reuse the secrets already on disk
+  when: forgejo_appini.stat.exists
+  block:
+    - name: Read app.ini
+      ansible.builtin.slurp:
+        src: "{{ forgejo_config }}"
+      register: forgejo_appini_raw
+      no_log: true
+
+    - name: Extract the existing secrets
+      ansible.builtin.set_fact:
+        forgejo_secret_key: "{{ _ini | regex_search('(?m)^SECRET_KEY\\s*=\\s*(\\S+)', '\\1') | first }}"
+        forgejo_internal_token: "{{ _ini | regex_search('(?m)^INTERNAL_TOKEN\\s*=\\s*(\\S+)', '\\1') | first }}"
+        forgejo_jwt_secret: "{{ _ini | regex_search('(?m)^JWT_SECRET\\s*=\\s*(\\S+)', '\\1') | first }}"
+        forgejo_lfs_jwt_secret: "{{ _ini | regex_search('(?m)^LFS_JWT_SECRET\\s*=\\s*(\\S+)', '\\1') | first }}"
+      vars:
+        _ini: "{{ forgejo_appini_raw.content | b64decode }}"
+      no_log: true
+
+- name: Generate the secrets (first run only)
+  when: not forgejo_appini.stat.exists
+  block:
+    - name: Ask Forgejo to generate them
+      ansible.builtin.command:
+        argv:
+          - "{{ forgejo_bin_dir }}/forgejo"
+          - generate
+          - secret
+          - "{{ item }}"
+      loop:
+        - SECRET_KEY
+        - INTERNAL_TOKEN
+        - JWT_SECRET
+        - LFS_JWT_SECRET
+      register: forgejo_generated
+      changed_when: false
+      no_log: true
+
+    - name: Keep them for the template
+      ansible.builtin.set_fact:
+        forgejo_secret_key: "{{ forgejo_generated.results[0].stdout | trim }}"
+        forgejo_internal_token: "{{ forgejo_generated.results[1].stdout | trim }}"
+        forgejo_jwt_secret: "{{ forgejo_generated.results[2].stdout | trim }}"
+        forgejo_lfs_jwt_secret: "{{ forgejo_generated.results[3].stdout | trim }}"
+      no_log: true
+
+- name: Write app.ini
+  ansible.builtin.template:
+    src: app.ini.j2
+    dest: "{{ forgejo_config }}"
+    owner: root
+    group: "{{ forgejo_group }}"
+    mode: "0640"
+  no_log: true          # the rendered file contains the DB password
+  notify: Restart forgejo

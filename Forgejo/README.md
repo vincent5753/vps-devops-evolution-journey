@@ -1,6 +1,10 @@
 # Forgejo
 ## 部署階段說明 / Intro of deployment stages
 01. PVE 基礎設施與 VM 供裝 (PVE infra and VM provisioning)
+02. Forgejo 主機前置與 systemd 沙箱 (Forgejo host prerequisites and systemd sandbox)
+
+Ansible 的程式碼集中在 [`ansible/`](ansible/)，不分散在各階段目錄下——它是一整棵樹、多個 role，後面的階段會繼續往裡面加
+The Ansible code lives together in [`ansible/`](ansible/) rather than being split across stage directories — it is one tree with many roles, and later stages keep adding to it.
 
 ## 01-PVE-Infra-and-VM-Provisioning
 ### 這會做什麼 (What this does)
