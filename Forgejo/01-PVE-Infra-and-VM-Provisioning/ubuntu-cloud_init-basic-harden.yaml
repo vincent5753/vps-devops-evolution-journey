@@ -101,13 +101,22 @@ write_files:
       net.ipv4.conf.all.accept_source_route = 0
       net.ipv4.icmp_echo_ignore_broadcasts = 1
       net.ipv4.tcp_syncookies = 1
+      # IPv6 off by default: this LAN hands out globally routable SLAAC
+      # addresses and the router does not filter inbound v6, and there is no
+      # v6 NAT to hide behind. It is here rather than in an Ansible node role
+      # because the exposure starts at boot, before Ansible first connects.
+      # A node that needs v6 sets these to 0 in 95-node-role.conf. Reversible.
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
       # --- Kernel layer ---
       kernel.randomize_va_space = 2
       kernel.kptr_restrict = 2
       kernel.dmesg_restrict = 1
-      # Value 1 is write-once: it cannot be relaxed again until reboot
-      kernel.unprivileged_bpf_disabled = 1
-      kernel.apparmor_restrict_unprivileged_userns = 1
+      # kernel.unprivileged_bpf_disabled left at the distro default (2):
+      # writing 1 is one-way and later sysctl.d files override it silently.
+      # kernel.apparmor_restrict_unprivileged_userns is NOT set here: it is a
+      # per-node value (Forgejo host 1, CI runner 0), so every node declares
+      # its own in 95-node-role.conf and the baseline stays silent on it.
 
 # ---------- Run on first boot ----------
 runcmd:

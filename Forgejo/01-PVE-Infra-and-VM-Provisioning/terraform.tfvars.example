@@ -13,5 +13,6 @@ vm_count       = 1
 vm_name_prefix = "tofu-node"
 vm_id_start    = 200
 vm_cores       = 2
-vm_memory      = 2048
+# 4096: a Forgejo host runs Forgejo and PostgreSQL side by side.
+vm_memory      = 4096
 vm_disk_size   = 20

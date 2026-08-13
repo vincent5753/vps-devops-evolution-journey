@@ -3,7 +3,9 @@ resource "proxmox_virtual_environment_vm" "node" {
 
   name        = format("%s-%02d", var.vm_name_prefix, count.index + 1)
   description = "Managed by OpenTofu"
-  tags        = ["opentofu", "ubuntu"]
+  # Ansible's Proxmox inventory plugin turns tags into groups.
+  # Keep sorted: PVE returns them sorted, so an unsorted list diffs forever.
+  tags = ["forgejo", "opentofu", "ubuntu"]
 
   node_name = var.pve_node
   vm_id     = var.vm_id_start + count.index

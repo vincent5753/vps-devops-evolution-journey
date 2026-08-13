@@ -60,9 +60,10 @@ variable "vm_cores" {
 }
 
 variable "vm_memory" {
+  # 4096: a Forgejo host runs Forgejo and PostgreSQL side by side.
   description = "MiB"
   type        = number
-  default     = 2048
+  default     = 4096
 }
 
 variable "vm_disk_size" {
