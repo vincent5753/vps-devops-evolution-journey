@@ -66,6 +66,10 @@ vault.yml*
 # 全域 gitignore 擋得住，但那是本機設定，不會跟著 clone 走
 # The global gitignore catches these, but it does not travel with a clone
 .DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
 
 # LLM 交接筆記：記的是當下還沒定案的事，會過期，不該被版控背書
 # Handoff notes: they record what was undecided at the time and go stale

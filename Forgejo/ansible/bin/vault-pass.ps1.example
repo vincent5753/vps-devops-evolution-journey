@@ -1,0 +1,26 @@
+# Copy to bin/vault-pass.ps1, then set vault_password_file in ansible.cfg
+# Print the password to stdout and NOTHING else: Ansible takes all of stdout,
+# so any extra output yields "Decryption failed".
+
+$ErrorActionPreference = "Stop"
+
+# Windows Credential Manager (PasswordVault). Store it once in PowerShell with:
+#   $vault = New-Object Windows.Security.Credentials.PasswordVault
+#   $cred = New-Object Windows.Security.Credentials.PasswordCredential("forgejo-ansible-vault", $env:USERNAME, "YOUR_VAULT_PASSWORD")
+#   $vault.Add($cred)
+
+try {
+    $vault = New-Object Windows.Security.Credentials.PasswordVault
+    $cred = $vault.Retrieve("forgejo-ansible-vault", $env:USERNAME)
+    $cred.RetrievePassword()
+    [Console]::Out.Write($cred.Password)
+}
+catch {
+    [Console]::Error.WriteLine("Error: Unable to retrieve vault password from Windows Credential Manager.")
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+
+# Alternatives for Windows CLI tools:
+# op read "op://Private/forgejo-ansible-vault/password"
+# bw get password forgejo-ansible-vault --raw
