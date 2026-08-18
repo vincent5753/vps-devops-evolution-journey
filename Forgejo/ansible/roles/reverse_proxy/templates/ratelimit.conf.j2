@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+# http-context directive — must live outside any server{} block. Consumed by
+# the location = /user/login block in git.home.arpa.conf.j2.
+limit_req_zone $binary_remote_addr zone=forgejo_auth:10m rate={{ forgejo_proxy_rate_limit }};

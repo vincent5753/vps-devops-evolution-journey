@@ -1,5 +1,8 @@
 ---
 # Stage 02 — Forgejo host prerequisites + systemd sandbox
+# Stage 03 (work line 1) — CA trust and TLS material (host_tls)
+# Stage 03 (work line 2) — ufw and the nginx reverse proxy
+# Stage 03 (work line 3) — Git SSH entry point (git_ssh)
 #     ansible-playbook site.yml --ask-vault-pass
 # Idempotency is an acceptance criterion: run three times, 2nd/3rd changed=0.
 - name: Forgejo host
@@ -8,3 +11,10 @@
     - common_baseline
     - postgres_server
     - node_forgejo
+    - host_tls
+    # host_firewall before reverse_proxy and git_ssh: the firewall must be in
+    # place before nginx/sshd start listening on the ports it covers
+    # (80/443/2222), not after.
+    - host_firewall
+    - reverse_proxy
+    - git_ssh

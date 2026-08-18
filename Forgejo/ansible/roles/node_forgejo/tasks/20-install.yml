@@ -56,6 +56,13 @@
     - name: Verify the detached signature
       # VALIDSIG reports the signing subkey first and the primary key last.
       # Requiring OUR pinned primary to appear is what survives rotation.
+      #
+      # GOODSIG is checked separately from VALIDSIG: gpg emits VALIDSIG (and
+      # the correct fingerprint) for EXPKEYSIG too — "the key has expired,
+      # but the signature was valid when it was made" is rc=0 with no error.
+      # Without requiring GOODSIG, an expired signing subkey would verify
+      # silently instead of aborting. The signing subkeys currently in use
+      # expire 2027-01-10 / 2027-06-09, so this hasn't fired yet in practice.
       ansible.builtin.command:
         argv:
           - gpg
@@ -75,6 +82,7 @@
       failed_when: >-
         forgejo_verify.rc != 0
         or ('VALIDSIG' not in forgejo_verify.stdout)
+        or ('GOODSIG' not in forgejo_verify.stdout)
         or (forgejo_gpg_fingerprint not in forgejo_verify.stdout)
 
     - name: Install the verified binary under its version

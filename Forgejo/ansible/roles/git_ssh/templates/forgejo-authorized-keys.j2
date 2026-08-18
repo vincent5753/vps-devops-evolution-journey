@@ -1,0 +1,6 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Invoked by sshd's AuthorizedKeysCommand for the git user (see
+# 60-forgejo-git.conf.j2). sshd expands %u %t %k into $1 $2 $3 before exec —
+# no shell involved on that side, so no quoting concerns there.
+exec {{ forgejo_bin_dir }}/forgejo keys --config {{ forgejo_config }} -e {{ forgejo_user }} -u "$1" -t "$2" -k "$3"

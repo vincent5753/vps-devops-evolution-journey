@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+# systemd override, NOT an edit of the vendor unit
+# (/usr/lib/systemd/system/ssh.socket) — this file lives under
+# /etc/systemd/system/ssh.socket.d/ instead, the same mechanism
+# `systemctl edit ssh.socket` uses.
+#
+# This matters because on this image sshd is socket-activated: the Port
+# directive in sshd_config has no effect on what actually gets listened on
+# (verified — sshd_config ships with #Port 22 commented out, and the real
+# bind comes from here). group_vars/forgejo/main.yml's forgejo_ssh_port is
+# the Forgejo-side truth (SSH_PORT in app.ini); this is its host-side twin.
+#
+# ListenStream= is normally additive across the vendor unit and its
+# drop-ins, but here it is reset first (an empty assignment clears the list
+# accumulated so far) and then re-declared IPv4-only. This project disables
+# IPv6 everywhere (see common_baseline's disable_ipv6 in the 90- baseline);
+# without the reset, the vendor unit's [::]:22 would keep sshd listening on
+# a v6 socket that no interface can ever reach — decorative, not a security
+# hole (no interface holds a v6 address), but there is no reason to leave it.
+[Socket]
+ListenStream=
+ListenStream=0.0.0.0:22
+ListenStream=0.0.0.0:{{ forgejo_ssh_port }}

@@ -1,0 +1,27 @@
+# Copy to bin/ca-pass.ps1. Consumed by 03-.../00-generate-ca.ps1 and
+# 01-issue-leaf-cert.ps1, which pipe its stdout into openssl's -pass stdin.
+# Print the passphrase to stdout and NOTHING else: any extra output becomes
+# part of the passphrase and openssl fails with a confusing "bad decrypt".
+
+$ErrorActionPreference = "Stop"
+
+# Windows Credential Manager (PasswordVault). Store it once in PowerShell with:
+#   $vault = New-Object Windows.Security.Credentials.PasswordVault
+#   $cred = New-Object Windows.Security.Credentials.PasswordCredential("forgejo-ca-passphrase", $env:USERNAME, "YOUR_CA_PASSPHRASE")
+#   $vault.Add($cred)
+
+try {
+    $vault = New-Object Windows.Security.Credentials.PasswordVault
+    $cred = $vault.Retrieve("forgejo-ca-passphrase", $env:USERNAME)
+    $cred.RetrievePassword()
+    [Console]::Out.Write($cred.Password)
+}
+catch {
+    [Console]::Error.WriteLine("Error: Unable to retrieve CA passphrase from Windows Credential Manager.")
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+
+# Alternatives for Windows CLI tools:
+# op read "op://Private/forgejo-ca-passphrase/password"
+# bw get password forgejo-ca-passphrase --raw

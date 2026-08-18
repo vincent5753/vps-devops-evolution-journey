@@ -1,0 +1,27 @@
+---
+# Stage 3, work line 2: hand ufw from "cloud-init set it once at boot" to
+# "Ansible enforces it continuously" — the same relationship common_baseline
+# already has with sysctl. Rules here are declared, not diffed by hand: an
+# unlisted port simply is not allowed, which is how ufw already behaves once
+# the default policy is deny.
+
+- name: The INVALID-conntrack drop rule must already be present
+  # Ubuntu's ufw package ships this in /etc/ufw/before.rules by default.
+  # Verified, not managed: hand-editing a package-owned template drifts on
+  # the next ufw upgrade. If this ever fails, the fix is a version bump of
+  # this assumption, not a template task added here.
+  ansible.builtin.command: grep -q "ctstate INVALID" /etc/ufw/before.rules
+  changed_when: false
+
+- name: Default deny incoming
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Allow the ports this node role needs
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ item }}"
+  loop: "{{ forgejo_firewall_allow_tcp_ports }}"

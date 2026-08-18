@@ -1,0 +1,88 @@
+---
+# Stage 3, work line 1: distribute the homelab CA's trust and the
+# git.home.arpa leaf certificate to the VM. Deliberately independent of
+# node_forgejo — this is host-level perimeter material, not an app concern,
+# and the future reverse_proxy role (nginx) just reads the paths this role
+# writes.
+
+- name: The CA certificate must exist on the control node
+  ansible.builtin.stat:
+    path: "{{ forgejo_tls_ca_src }}"
+  delegate_to: localhost
+  become: false
+  register: forgejo_tls_ca_stat
+
+- name: Assert the CA certificate is present
+  ansible.builtin.assert:
+    that:
+      - forgejo_tls_ca_stat.stat.exists
+    fail_msg: >-
+      {{ forgejo_tls_ca_src }} is missing. Run
+      03-Reverse-Proxy-TLS-and-Perimeter/00-generate-ca.sh on the control
+      node first.
+
+- name: The leaf key and certificate must exist on the control node
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  delegate_to: localhost
+  become: false
+  loop:
+    - "{{ forgejo_tls_leaf_key_src }}"
+    - "{{ forgejo_tls_leaf_cert_src }}"
+  register: forgejo_tls_leaf_stat
+
+- name: Assert the leaf key and certificate are present
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      {{ item.item }} is missing. Run
+      03-Reverse-Proxy-TLS-and-Perimeter/01-issue-leaf-cert.sh on the
+      control node first.
+  loop: "{{ forgejo_tls_leaf_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Install the CA certificate into the system trust store
+  # Must end in .crt and contain PEM for update-ca-certificates to pick it
+  # up — the source file's own .pem name doesn't matter, only the copy's.
+  ansible.builtin.copy:
+    src: "{{ forgejo_tls_ca_src }}"
+    dest: /usr/local/share/ca-certificates/forgejo-homelab-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update CA certificates
+
+- name: Flush handlers
+  # update-ca-certificates has to run before anything below relies on the
+  # VM trusting the chain (nothing does yet in this work line, but the next
+  # one — nginx — will, and getting the ordering right here avoids relearning
+  # this the way Stage 2 relearned network ordering the hard way).
+  ansible.builtin.meta: flush_handlers
+
+- name: TLS material directory
+  ansible.builtin.file:
+    path: "{{ forgejo_tls_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the leaf private key
+  # Not passphrase-protected (see 01-issue-leaf-cert.sh) — file mode is the
+  # only protection, hence root:root 0600.
+  ansible.builtin.copy:
+    src: "{{ forgejo_tls_leaf_key_src }}"
+    dest: "{{ forgejo_tls_dir }}/{{ forgejo_domain }}.key"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Deploy the leaf certificate
+  ansible.builtin.copy:
+    src: "{{ forgejo_tls_leaf_cert_src }}"
+    dest: "{{ forgejo_tls_dir }}/{{ forgejo_domain }}.pem"
+    owner: root
+    group: root
+    mode: "0644"

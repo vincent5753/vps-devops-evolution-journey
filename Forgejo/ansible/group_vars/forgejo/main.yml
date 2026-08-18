@@ -55,6 +55,49 @@ forgejo_role_sysctl:
   # disable_ipv6 is NOT here: an unsafe default has to be fixed at boot, not
   # whenever Ansible next runs, so it lives in the 90- baseline instead.
 
+# ---------- TLS (Stage 3, work line 1) ----------
+
+# Host-level, not Forgejo-specific, hence /etc/ssl/ rather than under
+# forgejo_conf_dir. Kept out of the OS-managed /etc/ssl/certs so nothing here
+# is mistaken for a package-managed file.
+forgejo_tls_dir: /etc/ssl/forgejo
+
+# Control-node paths, produced by 03-Reverse-Proxy-TLS-and-Perimeter/
+# 00-generate-ca.sh and 01-issue-leaf-cert.sh. playbook_dir is
+# Forgejo/ansible, so these resolve to ansible/pki/...
+forgejo_tls_ca_src: "{{ playbook_dir }}/pki/ca.pem"
+forgejo_tls_leaf_key_src: "{{ playbook_dir }}/pki/leaf/{{ forgejo_domain }}.key"
+forgejo_tls_leaf_cert_src: "{{ playbook_dir }}/pki/leaf/{{ forgejo_domain }}.pem"
+
+# ---------- Firewall (Stage 3, work line 2) ----------
+
+# cloud-init opened 22/tcp once at boot; Ansible now owns this declaratively,
+# the same relationship common_baseline already has with sysctl. 2222 (git
+# SSH, Stage 3 work line 3) is listed here too, ahead of git_ssh actually
+# opening it in sshd — same "firewall before the service" ordering as 80/443.
+forgejo_firewall_allow_tcp_ports:
+  - 22
+  - 80
+  - 443
+  - 2222
+
+# ---------- Reverse proxy (Stage 3, work line 2) ----------
+
+# Bounded rather than 0 (unlimited): a single-user homelab does not need an
+# uncapped request body, and Stage 02 already proved 3 GB LFS uploads work
+# end to end, so 4G leaves headroom without being a made-up number.
+forgejo_proxy_client_max_body_size: 4G
+
+# Login-endpoint rate limit — Forgejo's own lockout logs the proxy's address
+# unless REVERSE_PROXY_TRUSTED_PROXIES is honored (already set in app.ini),
+# so this is a second, independent layer in front of it.
+forgejo_proxy_rate_limit: 10r/m
+forgejo_proxy_rate_limit_burst: 5
+
+# Large pushes and LFS uploads run long; this has to exceed how long a slow
+# link takes to push the biggest object Stage 02 tested (3 GB).
+forgejo_proxy_timeout: 600s
+
 # ---------- Database (co-located) ----------
 
 # TCP loopback rather than a unix socket: moving PostgreSQL to its own host

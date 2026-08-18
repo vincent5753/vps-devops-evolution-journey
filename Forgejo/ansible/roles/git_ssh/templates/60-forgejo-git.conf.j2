@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Scoped to the git user only — the admin account (opentofu_adm) keeps using
+# its normal ~/.ssh/authorized_keys, untouched by any of this.
+Match User {{ forgejo_user }}
+    AuthorizedKeysCommand {{ forgejo_bin_dir }}/forgejo-authorized-keys %u %t %k
+    AuthorizedKeysCommandUser {{ forgejo_user }}
+    # Not just "SSH_CREATE_AUTHORIZED_KEYS_FILE = false" in app.ini: if a
+    # static authorized_keys file for this account ever exists (it doesn't
+    # today), sshd would still honor it, and a key revoked in the Forgejo UI
+    # would keep working via that second path. Pointing at /dev/null
+    # forecloses that regardless of what does or doesn't exist on disk.
+    AuthorizedKeysFile /dev/null

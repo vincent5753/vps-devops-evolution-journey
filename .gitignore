@@ -60,6 +60,31 @@ vault.yml*
 .env
 
 # ─────────────────────────────────────────────
+# Stage 3: 自簽 CA / TLS
+# ─────────────────────────────────────────────
+
+# ca.key 已被上面的 *.key 規則擋掉。ca.pem（root CA 公開憑證）刻意不擋——
+# 這是信任錨點，分發它的方式就是讓它進版控。ca.srl 是序號檔，非機密但沒必要進版控
+# ca.key is already caught by *.key above. ca.pem (the root CA's public
+# certificate) is deliberately left trackable — it's the trust anchor, and
+# committing it is how it gets distributed. ca.srl is a serial file: not a
+# secret, but no reason to version it either
+Forgejo/ansible/pki/*.srl
+
+# leaf 憑證每 90 天換發一次；整個目錄 ignore，蓋過上面 *.pem 的放行規則，
+# 避免每次續發都在 git 歷史留一筆
+# The leaf certificate rotates every 90 days; the whole directory is ignored
+# to override the *.pem allowance above, so each renewal does not leave a
+# commit behind
+Forgejo/ansible/pki/leaf/
+
+# CA 私鑰的加密密碼，走 Keychain/Credential Manager，比照 vault-pass 的模式
+# The CA private key's encryption passphrase, read from Keychain/Credential
+# Manager — same shape as vault-pass
+Forgejo/ansible/bin/ca-pass.sh
+Forgejo/ansible/bin/ca-pass.ps1
+
+# ─────────────────────────────────────────────
 # 作業系統與工作用檔案 / OS and working files
 # ─────────────────────────────────────────────
 

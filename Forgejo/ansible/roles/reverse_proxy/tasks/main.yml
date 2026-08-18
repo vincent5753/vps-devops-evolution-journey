@@ -1,0 +1,70 @@
+---
+# Stage 3, work line 2: terminate TLS and reverse-proxy to the Forgejo
+# instance host_tls and node_forgejo already prepared. Independent of
+# node_forgejo — this is host-level perimeter, not an app concern.
+
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Remove the default site
+  # Avoids an accidental second thing answering on 80/443 with the stock
+  # "Welcome to nginx" page.
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Rate-limit zone (http context)
+  ansible.builtin.template:
+    src: ratelimit.conf.j2
+    dest: /etc/nginx/conf.d/00-forgejo-ratelimit.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Shared proxy parameters snippet
+  ansible.builtin.template:
+    src: proxy-params.conf.j2
+    dest: /etc/nginx/snippets/forgejo-proxy-params.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Site configuration
+  ansible.builtin.template:
+    src: git.home.arpa.conf.j2
+    dest: "/etc/nginx/sites-available/{{ forgejo_domain }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable the site
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ forgejo_domain }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ forgejo_domain }}.conf"
+    state: link
+  notify: Reload nginx
+
+- name: Validate the nginx configuration
+  # `template`'s own `validate:` parameter does not work here: it would run
+  # `nginx -t -c <tmpfile>`, which treats the site snippet as if it were the
+  # whole nginx.conf and fails on missing http{}/events{} blocks. Validating
+  # the assembled config after all snippets land is the only correct check,
+  # and a non-zero rc here halts the play before the handler below applies
+  # anything — same "abort, don't half-apply" contract as work line 1's GPG
+  # verification.
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Enable and start nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: started
+    enabled: true

@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Shared by both locations in git.home.arpa.conf.j2 so the large-push and
+# trusted-proxy settings can't drift apart between them.
+
+proxy_http_version 1.1;
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+
+# Streams the request body straight through instead of buffering it to disk
+# first — without this, a large push or LFS upload gets buffered twice.
+proxy_request_buffering off;
+
+proxy_read_timeout {{ forgejo_proxy_timeout }};
+proxy_send_timeout {{ forgejo_proxy_timeout }};

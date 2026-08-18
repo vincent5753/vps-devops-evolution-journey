@@ -1,0 +1,109 @@
+---
+# Stage 3, work line 3: wire the host's OpenSSH up to Forgejo's key database
+# via AuthorizedKeysCommand, and open the port it listens on. See the
+# templates for the two non-obvious parts: sshd is socket-activated on this
+# image (ssh-socket-git-port.conf.j2), and revocation only really works with
+# AuthorizedKeysFile /dev/null (60-forgejo-git.conf.j2).
+
+- name: The AuthorizedKeysCommand wrapper's directory must be root-owned and not group/other writable
+  # sshd silently refuses to run AuthorizedKeysCommand otherwise, and only
+  # logs why at LogLevel DEBUG. /usr/local/bin already holds the forgejo
+  # binary itself, so this is a repeat of an existing guarantee, not a new
+  # one — verified once via `namei -l`, checked here on every run.
+  ansible.builtin.stat:
+    path: "{{ forgejo_bin_dir }}"
+  register: forgejo_ssh_bin_dir_stat
+
+- name: Assert that directory is safe for AuthorizedKeysCommand
+  ansible.builtin.assert:
+    that:
+      - forgejo_ssh_bin_dir_stat.stat.pw_name == "root"
+      - not forgejo_ssh_bin_dir_stat.stat.woth
+      - not forgejo_ssh_bin_dir_stat.stat.wgrp
+    fail_msg: >-
+      {{ forgejo_bin_dir }} is not root-owned and non-group/other-writable.
+      sshd will refuse AuthorizedKeysCommand here and only say why at
+      LogLevel DEBUG.
+
+- name: AuthorizedKeysCommand wrapper script
+  ansible.builtin.template:
+    src: forgejo-authorized-keys.j2
+    dest: "{{ forgejo_bin_dir }}/forgejo-authorized-keys"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: sshd Match block for the git user
+  ansible.builtin.template:
+    src: 60-forgejo-git.conf.j2
+    dest: /etc/ssh/sshd_config.d/60-forgejo-git.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: forgejo_ssh_sshd_config
+
+- name: systemd override directory for ssh.socket
+  ansible.builtin.file:
+    path: /etc/systemd/system/ssh.socket.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: ssh.socket override — also listen on the git SSH port
+  ansible.builtin.template:
+    src: ssh-socket-git-port.conf.j2
+    dest: /etc/systemd/system/ssh.socket.d/20-forgejo-git-port.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: forgejo_ssh_socket_override
+
+# `template`'s own `validate:` would run `sshd -t -f <this fragment alone>`,
+# which fails on a Match-only file missing the rest of sshd_config. Testing
+# the real, merged /etc/ssh/sshd_config after both files are on disk is the
+# only check that means anything, and a non-zero rc here halts the play
+# before the restart below — same "abort, don't half-apply" contract as
+# every other validated config in this playbook.
+- name: Validate the merged sshd configuration
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+- name: Reload systemd and restart sshd
+  # Only when something actually changed — an unconditional restart on every
+  # run would be a needless blip on the admin connection.
+  when: forgejo_ssh_sshd_config.changed or forgejo_ssh_socket_override.changed
+  block:
+    - name: Reload systemd units
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Restart ssh.socket
+      # Accept=no: restarting the socket unit is expected to take the
+      # triggered service with it, but ssh.service is restarted explicitly
+      # too right after — don't depend on that being implicit.
+      ansible.builtin.systemd_service:
+        name: ssh.socket
+        state: restarted
+
+    - name: Restart ssh.service
+      ansible.builtin.systemd_service:
+        name: ssh.service
+        state: restarted
+
+- name: The admin SSH port must still be reachable
+  # Proof, not assumption: KillMode=process should have left the existing
+  # Ansible connection alone, but this checks the actual listening state
+  # from the target itself rather than trusting that theory.
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 22
+    timeout: 10
+  become: false
+
+- name: The git SSH port must be listening
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ forgejo_ssh_port }}"
+    timeout: 10
+  become: false
