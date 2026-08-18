@@ -6,16 +6,16 @@
 - name: Is this version already installed?
   ansible.builtin.stat:
     path: "{{ forgejo_bin_dir }}/forgejo-{{ forgejo_version }}"
-  register: forgejo_binary
+  register: node_forgejo_binary
 
 - name: Download, verify and install
-  when: not forgejo_binary.stat.exists
+  when: not node_forgejo_binary.stat.exists
   block:
     - name: Staging directory on the control node
       ansible.builtin.tempfile:
         state: directory
         suffix: forgejo
-      register: forgejo_stage
+      register: node_forgejo_stage
       delegate_to: localhost
       become: false
 
@@ -23,14 +23,14 @@
       ansible.builtin.tempfile:
         state: directory
         suffix: gnupg
-      register: forgejo_gnupg
+      register: node_forgejo_gnupg
       delegate_to: localhost
       become: false
 
     - name: Fetch the binary and its detached signature
       ansible.builtin.get_url:
         url: "{{ forgejo_download_base }}/v{{ forgejo_version }}/{{ item }}"
-        dest: "{{ forgejo_stage.path }}/{{ item }}"
+        dest: "{{ node_forgejo_stage.path }}/{{ item }}"
         mode: "0644"
       loop:
         - "forgejo-{{ forgejo_version }}-linux-amd64"
@@ -48,7 +48,7 @@
           - --recv-keys
           - "{{ forgejo_gpg_fingerprint }}"
       environment:
-        GNUPGHOME: "{{ forgejo_gnupg.path }}"
+        GNUPGHOME: "{{ node_forgejo_gnupg.path }}"
       delegate_to: localhost
       become: false
       changed_when: false
@@ -72,22 +72,22 @@
           - --verify
           - "forgejo-{{ forgejo_version }}-linux-amd64.asc"
           - "forgejo-{{ forgejo_version }}-linux-amd64"
-        chdir: "{{ forgejo_stage.path }}"
+        chdir: "{{ node_forgejo_stage.path }}"
       environment:
-        GNUPGHOME: "{{ forgejo_gnupg.path }}"
-      register: forgejo_verify
+        GNUPGHOME: "{{ node_forgejo_gnupg.path }}"
+      register: node_forgejo_verify
       delegate_to: localhost
       become: false
       changed_when: false
       failed_when: >-
-        forgejo_verify.rc != 0
-        or ('VALIDSIG' not in forgejo_verify.stdout)
-        or ('GOODSIG' not in forgejo_verify.stdout)
-        or (forgejo_gpg_fingerprint not in forgejo_verify.stdout)
+        node_forgejo_verify.rc != 0
+        or ('VALIDSIG' not in node_forgejo_verify.stdout)
+        or ('GOODSIG' not in node_forgejo_verify.stdout)
+        or (forgejo_gpg_fingerprint not in node_forgejo_verify.stdout)
 
     - name: Install the verified binary under its version
       ansible.builtin.copy:
-        src: "{{ forgejo_stage.path }}/forgejo-{{ forgejo_version }}-linux-amd64"
+        src: "{{ node_forgejo_stage.path }}/forgejo-{{ forgejo_version }}-linux-amd64"
         dest: "{{ forgejo_bin_dir }}/forgejo-{{ forgejo_version }}"
         owner: root
         group: root
@@ -99,8 +99,8 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - "{{ forgejo_stage.path | default('', true) }}"
-        - "{{ forgejo_gnupg.path | default('', true) }}"
+        - "{{ node_forgejo_stage.path | default('', true) }}"
+        - "{{ node_forgejo_gnupg.path | default('', true) }}"
       when: item | length > 0
       delegate_to: localhost
       become: false

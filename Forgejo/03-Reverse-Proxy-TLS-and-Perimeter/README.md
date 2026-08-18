@@ -43,7 +43,7 @@ cd Forgejo/03-Reverse-Proxy-TLS-and-Perimeter
 # 推送 CA 信任 + leaf 憑證到 VM
 # Push CA trust + the leaf certificate to the VM
 cd ../ansible
-ansible-playbook site.yml --vault-password-file ./bin/vault-pass.sh
+./bin/arun ansible-playbook site.yml
 
 # 讓這台 Mac 信任這個 CA —— 使用者自己執行,不代勞
 # Trust this CA on this Mac — run this yourself, it is not automated
@@ -82,7 +82,7 @@ Where it lands on the VM (deployed by `roles/host_tls`):
 - [ ] `openssl x509 -in ansible/pki/leaf/git.home.arpa.pem -noout -ext subjectAltName -dates` SAN 是 `DNS:git.home.arpa`、效期 90 天 / SAN is `DNS:git.home.arpa`, 90-day validity
 - [ ] VM 上 `/etc/ssl/forgejo/` 權限正確 / correct permissions on the VM
 - [ ] VM 上 `openssl x509 -in /usr/local/share/ca-certificates/forgejo-homelab-ca.crt -noout -subject` 確認是我們的 CA / confirms it is our CA
-- [ ] `ansible-playbook site.yml` 連跑兩次,第二次 `host_tls` 相關 task 全部 `changed=0` / two consecutive runs, second one reports `changed=0` for all `host_tls` tasks
+- [ ] `./bin/arun ansible-playbook site.yml` 連跑兩次,第二次 `host_tls` 相關 task 全部 `changed=0` / two consecutive runs, second one reports `changed=0` for all `host_tls` tasks
 - [ ] `security find-certificate -c "Forgejo Homelab Root CA" -p login.keychain-db` 在 Mac 上找得到(執行 `02-trust-ca-macos.sh` 之後) / found on the Mac (after running `02-trust-ca-macos.sh`)
 
 ## 工作線 2：nginx 反向代理 + ufw (Work line 2: nginx reverse proxy + ufw)

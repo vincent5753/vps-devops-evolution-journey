@@ -21,8 +21,15 @@
 # Ansible
 # ─────────────────────────────────────────────
 
-# Galaxy 下載的 collection：可透過 requirements.yml 重新安裝
-# Collections downloaded by Galaxy: reinstallable from requirements.yml
+# 控制端的 Python 虛擬環境：由 requirements.txt 重建,重建得出來就不必進版控
+# Control-node Python virtualenv: rebuilt from requirements.txt, so never committed
+.venv/
+
+# collections_path 指向這裡,而且刻意保持空的——它的工作是擋住 ~/.ansible/collections
+# 蓋掉釘選版本內附的 collection,不是用來存放下載內容
+# collections_path points here and it is deliberately kept empty: its job is to stop
+# ~/.ansible/collections shadowing the collections bundled with the pinned ansible,
+# not to hold downloaded content
 collections/
 
 # Vault 密碼：寬鬆比對而非逐一列舉，列舉遲早會漏一個

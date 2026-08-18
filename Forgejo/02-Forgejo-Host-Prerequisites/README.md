@@ -54,12 +54,12 @@ Secrets and the PVE token:
 ```bash
 cd ../ansible
 
-# 只有純 ansible-core 安裝才需要這行。Homebrew 的完整 `ansible` 套件已內附三個
-# collection,跑了反而會裝一份沒釘版本的到本機目錄並優先生效
-# Only needed on a bare ansible-core install. The full Homebrew `ansible`
-# package already bundles all three; running this shadows them with unpinned
-# copies in a local directory
-ansible-galaxy collection install -r requirements.yml -p collections
+# 控制端工具鏈。uv 會下載一份自己的 Python,系統與 Homebrew 的 Python 一律不碰
+# The control-node toolchain. uv downloads a Python of its own; neither the
+# system nor the Homebrew interpreter is touched
+uv python install "$(cat .python-version)"
+uv venv --managed-python --python "$(cat .python-version)" .venv
+uv pip sync requirements.txt --python .venv/bin/python
 
 # 唯讀 inventory token,存進 Keychain 而不是環境變數
 # The read-only inventory token, in the Keychain rather than an env var
@@ -83,16 +83,39 @@ The cost, stated plainly: **from a clean clone the playbook does not carry every
 建議另開一把**唯讀**的 PVE token 給 Ansible。Stage 01 那把有 `VM.Allocate` / `VM.Clone` / `VM.PowerMgmt`，而 inventory 只需要「看」
 Use a separate **read-only** PVE token for Ansible. The Stage 01 token carries `VM.Allocate` / `VM.Clone` / `VM.PowerMgmt`; the inventory only needs to look. PVE's built-in `PVEAuditor` role scoped to `/vms` and `/nodes` is enough.
 
+## 工具鏈釘選 (A pinned toolchain)
+
+控制端的 ansible、ansible-lint 與 Python 版本全部釘在 `requirements.txt`,由 `requirements.in` 編譯而來並附 SHA256 雜湊
+The control node's ansible, ansible-lint and Python versions are all pinned in `requirements.txt`, compiled from `requirements.in` with SHA256 hashes:
+
+```bash
+uv pip compile requirements.in -o requirements.txt --generate-hashes --python .venv/bin/python
+uv pip sync requirements.txt --python .venv/bin/python
+```
+
+釘選的理由是升級應該是一個可以回滾的 commit,而不是套件管理員在你沒注意時做掉的事——這個專案就發生過一次:例行的 `brew upgrade` 把 ansible 從 14.2.0 換成 14.3.1,git 裡沒有任何一行記錄它發生過
+The reason to pin is that an upgrade should be a commit you can revert, not something a package manager does while you are not looking — which already happened here once: a routine `brew upgrade` moved ansible from 14.2.0 to 14.3.1 with nothing in git recording it.
+
+`ansible` 是內含電池的發行版而非 `ansible-core`,所以這一行釘選同時鎖住了 90 個內附 collection,包含本專案用到的四個。只有當需要一個沒被內附的 collection 時,才需要另外一層 collection 的釘選檔
+`ansible` is the batteries-included distribution rather than `ansible-core`, so that single pin also fixes the 90 bundled collections, including the four this project uses. A separate collection pin file only becomes necessary if something needed stops being bundled.
+
+ansible-lint 刻意裝在同一個環境裡:它是透過自己 import 得到的 ansible-core 來解析模組,裝在別處就看不到內附的 collection,於是把每一個模組都報成無法解析——三個假的錯誤,長得跟真的缺陷一模一樣
+ansible-lint is deliberately installed in the same environment: it resolves modules through the ansible-core it can import, so installed elsewhere it sees none of the bundled collections and reports every module as unresolvable — three false errors that look exactly like real defects.
+
 ## 執行 (Running it)
 ```bash
 cd ../ansible
-ansible-inventory --graph                       # 先確認 forgejo 群組抓得到那台機器
-ansible-playbook site.yml --vault-password-file ./bin/vault-pass.sh --check --diff
-ansible-playbook site.yml --vault-password-file ./bin/vault-pass.sh
+./bin/arun ansible-inventory --graph            # 先確認 forgejo 群組抓得到那台機器
+./bin/arun ansible-playbook site.yml --check --diff
+./bin/arun ansible-playbook site.yml
+./bin/arun ansible-lint                         # 標準寫在 .ansible-lint,不必記旗標
 ```
 
-Vault 密碼由 `bin/vault-pass.sh` 從 macOS Keychain 取出（該檔 gitignored，範本是 `bin/vault-pass.sh.example`）。想省掉每次的旗標，就把 `ansible.cfg` 的 `vault_password_file` 取消註解；沒有 helper script 時退回 `--ask-vault-pass` 也能運作
-The vault password comes from the macOS Keychain via `bin/vault-pass.sh` (gitignored; the template is `bin/vault-pass.sh.example`). To drop the flag, uncomment `vault_password_file` in `ansible.cfg`; without the helper, `--ask-vault-pass` still works.
+`bin/arun` 在釘選好的環境裡執行一個指令。用 wrapper 而不是「先 activate venv」的理由是:activate 是人要記得做的一步,而忘記做並不會失敗——它會安靜地改用 PATH 上的那一套。已實測確認過這個 fallback 是無聲的,所以 wrapper 會自己先擋:找不到釘選環境就以非零狀態碼中止,而不是退回去用別的
+`bin/arun` runs one command inside the pinned environment. A wrapper rather than "activate the venv first" because activation is a step a human has to remember, and forgetting it does not fail — it quietly uses whatever is on PATH instead. That fallback was verified to be silent, so the wrapper refuses it: no pinned environment means a non-zero exit, not a substitution.
+
+Vault 密碼由 `bin/vault-pass.sh` 從 macOS Keychain 取出（該檔 gitignored，範本是 `bin/vault-pass.sh.example`），路徑寫在 `ansible.cfg` 裡所以指令上不必再帶旗標；沒有 helper script 時退回 `--ask-vault-pass` 也能運作
+The vault password comes from the macOS Keychain via `bin/vault-pass.sh` (gitignored; the template is `bin/vault-pass.sh.example`). `ansible.cfg` names it, so no flag is needed on the command line; without the helper, `--ask-vault-pass` still works.
 
 > **⚠ 輪替密碼時的順序陷阱**
 >
@@ -185,9 +208,9 @@ To test LFS before Stage 03 you must work around ROOT_URL (see Deliberate trade-
 ```bash
 ssh -L 3000:127.0.0.1:3000 opentofu_adm@<vm-ip>     # 另一個終端保持開著 / keep this open
 
-ansible-playbook site.yml -e forgejo_root_url=http://127.0.0.1:3000/
+./bin/arun ansible-playbook site.yml -e forgejo_root_url=http://127.0.0.1:3000/
 #   … clone http://127.0.0.1:3000/<user>/<repo>.git 並推送 LFS 檔案 …
-ansible-playbook site.yml                            # 還原 / restore
+./bin/arun ansible-playbook site.yml                 # 還原 / restore
 ```
 
 > **⚠ 這一項的理由和計畫寫的不一樣，實測後修正**

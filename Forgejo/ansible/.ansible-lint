@@ -1,0 +1,9 @@
+---
+# The standard lives in this file rather than in a flag someone has to
+# remember to type: `./bin/arun ansible-lint` with no arguments is the gate,
+# and it is the same gate in CI.
+profile: production
+
+exclude_paths:
+  - .venv/
+  - collections/

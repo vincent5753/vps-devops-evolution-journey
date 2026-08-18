@@ -29,7 +29,7 @@ SSH_PORT = {{ forgejo_ssh_port }}
 
 APP_DATA_PATH = {{ forgejo_home }}/data
 LFS_START_SERVER = {{ forgejo_lfs_enabled | lower }}
-LFS_JWT_SECRET = {{ forgejo_lfs_jwt_secret }}
+LFS_JWT_SECRET = {{ node_forgejo_lfs_jwt_secret }}
 
 [database]
 DB_TYPE  = postgres
@@ -57,8 +57,8 @@ PATH = {{ forgejo_home }}/data/lfs
 ; No installer wizard: app.ini is written by Ansible. Without this the
 ; install page is served to anyone who can reach the port.
 INSTALL_LOCK   = true
-SECRET_KEY     = {{ forgejo_secret_key }}
-INTERNAL_TOKEN = {{ forgejo_internal_token }}
+SECRET_KEY     = {{ node_forgejo_secret_key }}
+INTERNAL_TOKEN = {{ node_forgejo_internal_token }}
 ; Without these Forgejo sees every connection as 127.0.0.1 once Nginx is in
 ; front: login lockout treats all users as one source and the audit trail
 ; records the loopback. LIMIT is trusted proxy hops — one Nginx means 1.
@@ -66,7 +66,7 @@ REVERSE_PROXY_TRUSTED_PROXIES = 127.0.0.1/32
 REVERSE_PROXY_LIMIT = 1
 
 [oauth2]
-JWT_SECRET = {{ forgejo_jwt_secret }}
+JWT_SECRET = {{ node_forgejo_jwt_secret }}
 
 [service]
 DISABLE_REGISTRATION = {{ forgejo_disable_registration | lower }}

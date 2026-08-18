@@ -1,7 +1,18 @@
 ---
-- ansible.builtin.import_tasks: 00-preflight.yml
-- ansible.builtin.import_tasks: 05-network.yml
-- ansible.builtin.import_tasks: 10-account.yml
-- ansible.builtin.import_tasks: 20-install.yml
-- ansible.builtin.import_tasks: 30-config.yml
-- ansible.builtin.import_tasks: 40-service.yml
+- name: Preflight assertions
+  ansible.builtin.import_tasks: 00-preflight.yml
+
+- name: Static network configuration
+  ansible.builtin.import_tasks: 05-network.yml
+
+- name: Service account, directory layout and node-role sysctl
+  ansible.builtin.import_tasks: 10-account.yml
+
+- name: Signature-verified binary install
+  ansible.builtin.import_tasks: 20-install.yml
+
+- name: Application configuration
+  ansible.builtin.import_tasks: 30-config.yml
+
+- name: Systemd unit and service state
+  ansible.builtin.import_tasks: 40-service.yml

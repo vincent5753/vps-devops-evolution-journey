@@ -10,12 +10,12 @@
     path: "{{ forgejo_tls_ca_src }}"
   delegate_to: localhost
   become: false
-  register: forgejo_tls_ca_stat
+  register: host_tls_ca_stat
 
 - name: Assert the CA certificate is present
   ansible.builtin.assert:
     that:
-      - forgejo_tls_ca_stat.stat.exists
+      - host_tls_ca_stat.stat.exists
     fail_msg: >-
       {{ forgejo_tls_ca_src }} is missing. Run
       03-Reverse-Proxy-TLS-and-Perimeter/00-generate-ca.sh on the control
@@ -29,7 +29,7 @@
   loop:
     - "{{ forgejo_tls_leaf_key_src }}"
     - "{{ forgejo_tls_leaf_cert_src }}"
-  register: forgejo_tls_leaf_stat
+  register: host_tls_leaf_stat
 
 - name: Assert the leaf key and certificate are present
   ansible.builtin.assert:
@@ -39,7 +39,7 @@
       {{ item.item }} is missing. Run
       03-Reverse-Proxy-TLS-and-Perimeter/01-issue-leaf-cert.sh on the
       control node first.
-  loop: "{{ forgejo_tls_leaf_stat.results }}"
+  loop: "{{ host_tls_leaf_stat.results }}"
   loop_control:
     label: "{{ item.item }}"
 

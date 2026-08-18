@@ -3,7 +3,7 @@
 # Stage 03 (work line 1) — CA trust and TLS material (host_tls)
 # Stage 03 (work line 2) — ufw and the nginx reverse proxy
 # Stage 03 (work line 3) — Git SSH entry point (git_ssh)
-#     ansible-playbook site.yml --ask-vault-pass
+#     ./bin/arun ansible-playbook site.yml
 # Idempotency is an acceptance criterion: run three times, 2nd/3rd changed=0.
 - name: Forgejo host
   hosts: forgejo

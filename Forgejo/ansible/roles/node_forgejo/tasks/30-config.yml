@@ -6,29 +6,29 @@
 - name: Is there an existing app.ini?
   ansible.builtin.stat:
     path: "{{ forgejo_config }}"
-  register: forgejo_appini
+  register: node_forgejo_appini
 
 - name: Reuse the secrets already on disk
-  when: forgejo_appini.stat.exists
+  when: node_forgejo_appini.stat.exists
   block:
     - name: Read app.ini
       ansible.builtin.slurp:
         src: "{{ forgejo_config }}"
-      register: forgejo_appini_raw
+      register: node_forgejo_appini_raw
       no_log: true
 
     - name: Extract the existing secrets
       ansible.builtin.set_fact:
-        forgejo_secret_key: "{{ _ini | regex_search('(?m)^SECRET_KEY\\s*=\\s*(\\S+)', '\\1') | first }}"
-        forgejo_internal_token: "{{ _ini | regex_search('(?m)^INTERNAL_TOKEN\\s*=\\s*(\\S+)', '\\1') | first }}"
-        forgejo_jwt_secret: "{{ _ini | regex_search('(?m)^JWT_SECRET\\s*=\\s*(\\S+)', '\\1') | first }}"
-        forgejo_lfs_jwt_secret: "{{ _ini | regex_search('(?m)^LFS_JWT_SECRET\\s*=\\s*(\\S+)', '\\1') | first }}"
+        node_forgejo_secret_key: "{{ _ini | regex_search('(?m)^SECRET_KEY\\s*=\\s*(\\S+)', '\\1') | first }}"
+        node_forgejo_internal_token: "{{ _ini | regex_search('(?m)^INTERNAL_TOKEN\\s*=\\s*(\\S+)', '\\1') | first }}"
+        node_forgejo_jwt_secret: "{{ _ini | regex_search('(?m)^JWT_SECRET\\s*=\\s*(\\S+)', '\\1') | first }}"
+        node_forgejo_lfs_jwt_secret: "{{ _ini | regex_search('(?m)^LFS_JWT_SECRET\\s*=\\s*(\\S+)', '\\1') | first }}"
       vars:
-        _ini: "{{ forgejo_appini_raw.content | b64decode }}"
+        _ini: "{{ node_forgejo_appini_raw.content | b64decode }}"
       no_log: true
 
 - name: Generate the secrets (first run only)
-  when: not forgejo_appini.stat.exists
+  when: not node_forgejo_appini.stat.exists
   block:
     - name: Ask Forgejo to generate them
       ansible.builtin.command:
@@ -42,16 +42,16 @@
         - INTERNAL_TOKEN
         - JWT_SECRET
         - LFS_JWT_SECRET
-      register: forgejo_generated
+      register: node_forgejo_generated
       changed_when: false
       no_log: true
 
     - name: Keep them for the template
       ansible.builtin.set_fact:
-        forgejo_secret_key: "{{ forgejo_generated.results[0].stdout | trim }}"
-        forgejo_internal_token: "{{ forgejo_generated.results[1].stdout | trim }}"
-        forgejo_jwt_secret: "{{ forgejo_generated.results[2].stdout | trim }}"
-        forgejo_lfs_jwt_secret: "{{ forgejo_generated.results[3].stdout | trim }}"
+        node_forgejo_secret_key: "{{ node_forgejo_generated.results[0].stdout | trim }}"
+        node_forgejo_internal_token: "{{ node_forgejo_generated.results[1].stdout | trim }}"
+        node_forgejo_jwt_secret: "{{ node_forgejo_generated.results[2].stdout | trim }}"
+        node_forgejo_lfs_jwt_secret: "{{ node_forgejo_generated.results[3].stdout | trim }}"
       no_log: true
 
 - name: Write app.ini

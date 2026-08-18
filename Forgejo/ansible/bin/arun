@@ -1,0 +1,40 @@
+#!/bin/sh
+# Run one command inside this directory's pinned toolchain.
+#
+#     ./bin/arun ansible-playbook site.yml
+#     ./bin/arun ansible-lint
+#     ./bin/arun ansible-inventory --graph
+#
+# Why a wrapper rather than "activate the venv first": activation is a step a
+# human has to remember, and forgetting it does not fail — it silently runs
+# whatever ansible is on PATH. This makes the pinned environment the only way
+# to invoke the tools, so there is nothing to remember.
+set -eu
+
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+venv="$here/.venv"
+
+[ $# -gt 0 ] || { echo "usage: ${0##*/} <command> [args...]" >&2; exit 2; }
+
+# A guard, not decoration. Verified: with no .venv present, `uv run` falls
+# through to whatever is on PATH and says nothing about having done so. Right
+# now Homebrew carries the same versions, so that fallback is invisible — it
+# would begin lying at the exact moment the pin and the Homebrew build
+# diverge, which is the moment the pin exists to protect against.
+if [ ! -x "$venv/bin/$1" ]; then
+    echo "${0##*/}: '$1' is not installed in $venv" >&2
+    echo "" >&2
+    echo "Create the environment (nothing outside this directory is touched;" >&2
+    echo "uv downloads its own Python rather than using the system one):" >&2
+    echo "    cd $here" >&2
+    echo "    uv venv --managed-python --python \"\$(cat .python-version)\" .venv" >&2
+    echo "    uv pip sync requirements.txt --python .venv/bin/python" >&2
+    exit 127
+fi
+
+# ansible.cfg is only picked up from the current directory, and the vault
+# password file it names is a relative path, so the command has to run from
+# the ansible root no matter where the caller invoked this script from.
+cd "$here"
+
+VIRTUAL_ENV="$venv" exec uv run --no-project --active "$@"

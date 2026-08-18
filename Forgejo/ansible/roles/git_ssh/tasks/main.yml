@@ -12,14 +12,14 @@
   # one — verified once via `namei -l`, checked here on every run.
   ansible.builtin.stat:
     path: "{{ forgejo_bin_dir }}"
-  register: forgejo_ssh_bin_dir_stat
+  register: git_ssh_bin_dir_stat
 
 - name: Assert that directory is safe for AuthorizedKeysCommand
   ansible.builtin.assert:
     that:
-      - forgejo_ssh_bin_dir_stat.stat.pw_name == "root"
-      - not forgejo_ssh_bin_dir_stat.stat.woth
-      - not forgejo_ssh_bin_dir_stat.stat.wgrp
+      - git_ssh_bin_dir_stat.stat.pw_name == "root"
+      - not git_ssh_bin_dir_stat.stat.woth
+      - not git_ssh_bin_dir_stat.stat.wgrp
     fail_msg: >-
       {{ forgejo_bin_dir }} is not root-owned and non-group/other-writable.
       sshd will refuse AuthorizedKeysCommand here and only say why at
@@ -33,16 +33,16 @@
     group: root
     mode: "0755"
 
-- name: sshd Match block for the git user
+- name: Deploy the sshd Match block for the git user
   ansible.builtin.template:
     src: 60-forgejo-git.conf.j2
     dest: /etc/ssh/sshd_config.d/60-forgejo-git.conf
     owner: root
     group: root
     mode: "0644"
-  register: forgejo_ssh_sshd_config
+  register: git_ssh_sshd_config
 
-- name: systemd override directory for ssh.socket
+- name: Create the systemd override directory for ssh.socket
   ansible.builtin.file:
     path: /etc/systemd/system/ssh.socket.d
     state: directory
@@ -50,14 +50,14 @@
     group: root
     mode: "0755"
 
-- name: ssh.socket override — also listen on the git SSH port
+- name: Override ssh.socket to also listen on the git SSH port
   ansible.builtin.template:
     src: ssh-socket-git-port.conf.j2
     dest: /etc/systemd/system/ssh.socket.d/20-forgejo-git-port.conf
     owner: root
     group: root
     mode: "0644"
-  register: forgejo_ssh_socket_override
+  register: git_ssh_socket_override
 
 # `template`'s own `validate:` would run `sshd -t -f <this fragment alone>`,
 # which fails on a Match-only file missing the rest of sshd_config. Testing
@@ -72,7 +72,7 @@
 - name: Reload systemd and restart sshd
   # Only when something actually changed — an unconditional restart on every
   # run would be a needless blip on the admin connection.
-  when: forgejo_ssh_sshd_config.changed or forgejo_ssh_socket_override.changed
+  when: git_ssh_sshd_config.changed or git_ssh_socket_override.changed
   block:
     - name: Reload systemd units
       ansible.builtin.systemd_service:

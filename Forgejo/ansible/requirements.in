@@ -1,0 +1,32 @@
+# Control-node toolchain, pinned. Compile to requirements.txt after editing:
+#     uv pip compile requirements.in -o requirements.txt --generate-hashes
+#
+# Pinned because the alternative is a package manager changing it silently:
+# this project ran on ansible 14.2.0, and a routine `brew upgrade` moved it to
+# 14.3.1 with nothing in git recording that it happened. An upgrade should be
+# a diff and a commit that can be reverted, the same reason the Forgejo binary
+# is deployed as forgejo-<version> plus a symlink rather than in place.
+
+# The batteries-included distribution, NOT ansible-core: this single pin fixes
+# ansible-core and all 90 bundled collections at once, so the four this project
+# depends on (community.general, ansible.posix, community.postgresql,
+# community.proxmox) need no separate pin. A collection requirements file only
+# becomes necessary if something we need stops being bundled.
+ansible==14.3.1
+
+# Deliberately the same environment as ansible above. ansible-lint resolves
+# modules through the ansible-core it can import, so installed on its own it
+# sees no bundled collections and reports every module as unresolvable —
+# three false "unknown-module" errors that look exactly like real defects.
+ansible-lint==26.8.0
+
+# Required by the community.proxmox inventory plugin (it declares
+# "requests >= 1.1"). It is listed here because the clean environment exposed
+# it: under Homebrew the plugin worked by accident, borrowing a requests that
+# some unrelated package had installed. Nothing recorded that dependency, so
+# nothing would have stopped it disappearing.
+#
+# Deliberately unpinned, unlike the two above: we hold an opinion about which
+# ansible we run, and none about which requests. requirements.txt pins it
+# either way.
+requests

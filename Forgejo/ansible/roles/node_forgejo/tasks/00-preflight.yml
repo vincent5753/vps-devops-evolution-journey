@@ -27,5 +27,5 @@
   delegate_to: localhost
   become: false
   changed_when: false
-  register: forgejo_gpg_present
-  failed_when: forgejo_gpg_present.rc != 0
+  register: node_forgejo_gpg_present
+  failed_when: node_forgejo_gpg_present.rc != 0
