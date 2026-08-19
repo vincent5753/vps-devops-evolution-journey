@@ -1,8 +1,10 @@
 # {{ ansible_managed }}
 
 server {
+    # IPv4 only, deliberately. This project disables IPv6 at the baseline, so
+    # an [::] listener would bind a wildcard nothing can reach — decorative
+    # residue that leaves the next reader unsure which state was intended.
     listen 80;
-    listen [::]:80;
     server_name {{ forgejo_domain }};
 
     # No ACME here — the CA is self-signed (Stage 3 work line 1), so there is
@@ -12,7 +14,6 @@ server {
 
 server {
     listen 443 ssl http2;
-    listen [::]:443 ssl http2;
     server_name {{ forgejo_domain }};
 
     ssl_certificate     {{ forgejo_tls_dir }}/{{ forgejo_domain }}.pem;

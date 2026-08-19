@@ -68,3 +68,55 @@
     name: nginx
     state: started
     enabled: true
+
+# Handlers run at the end of the play by default, so checks placed here would
+# otherwise exercise the configuration that was already loaded and pass while
+# the one just written sits unread on disk — a green light that means nothing.
+# Flushing first is what makes the checks below a verification rather than a
+# coincidence. This also flushes the earlier roles' pending handlers, so a
+# Forgejo restart lands here instead of at the end of the play; that is
+# deliberate, since git_ssh's own checks then run against a settled system.
+- name: Apply pending reloads before verifying
+  ansible.builtin.meta: flush_handlers
+
+# `nginx -t` above only proves the configuration parses. These two prove it
+# serves. Both run every time rather than only after a change: a check that
+# only fires on change cannot catch config that was deployed but never
+# exercised, nor a certificate that quietly expired, nor an edit made by hand.
+- name: The proxy must serve Forgejo over HTTPS
+  # On the target rather than the control node on purpose. The job here is to
+  # prove the configuration just deployed works, not that the operator's laptop
+  # can reach it; testing from outside merges two failure domains, and then a
+  # failure cannot tell nginx apart from local name resolution.
+  #
+  # validate_certs stays on deliberately. It is the cheapest available proof
+  # that the CA is in the target's trust store, that the leaf matches the name
+  # it is served under, and that it has not expired.
+  ansible.builtin.uri:
+    url: "https://{{ forgejo_domain }}/"
+    validate_certs: true
+    status_code: 200
+  register: reverse_proxy_https_check
+  retries: 3
+  delay: 2
+  until: reverse_proxy_https_check.status is defined and reverse_proxy_https_check.status == 200
+  changed_when: false
+  become: false
+
+- name: Plain HTTP must redirect to HTTPS
+  ansible.builtin.uri:
+    url: "http://{{ forgejo_domain }}/"
+    follow_redirects: none
+    status_code: 301
+  register: reverse_proxy_http_check
+  changed_when: false
+  become: false
+
+- name: The redirect must point at HTTPS on the same name
+  ansible.builtin.assert:
+    that:
+      - reverse_proxy_http_check.location is defined
+      - reverse_proxy_http_check.location.startswith('https://' ~ forgejo_domain)
+    fail_msg: >-
+      Port 80 answered but did not redirect to https://{{ forgejo_domain }} —
+      it returned {{ reverse_proxy_http_check.location | default('no Location header') }}.

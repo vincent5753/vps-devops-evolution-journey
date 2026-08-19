@@ -77,13 +77,13 @@ Where it lands on the VM (deployed by `roles/host_tls`):
 
 ## 驗收清單 (Acceptance checklist)
 
-- [ ] `openssl x509 -in ansible/pki/ca.pem -noout -text` 顯示 `CA:TRUE`、效期約 10 年 / shows `CA:TRUE`, ~10-year validity
-- [ ] `openssl verify -CAfile ansible/pki/ca.pem ansible/pki/leaf/git.home.arpa.pem` 通過 / passes
-- [ ] `openssl x509 -in ansible/pki/leaf/git.home.arpa.pem -noout -ext subjectAltName -dates` SAN 是 `DNS:git.home.arpa`、效期 90 天 / SAN is `DNS:git.home.arpa`, 90-day validity
-- [ ] VM 上 `/etc/ssl/forgejo/` 權限正確 / correct permissions on the VM
-- [ ] VM 上 `openssl x509 -in /usr/local/share/ca-certificates/forgejo-homelab-ca.crt -noout -subject` 確認是我們的 CA / confirms it is our CA
-- [ ] `./bin/arun ansible-playbook site.yml` 連跑兩次,第二次 `host_tls` 相關 task 全部 `changed=0` / two consecutive runs, second one reports `changed=0` for all `host_tls` tasks
-- [ ] `security find-certificate -c "Forgejo Homelab Root CA" -p login.keychain-db` 在 Mac 上找得到(執行 `02-trust-ca-macos.sh` 之後) / found on the Mac (after running `02-trust-ca-macos.sh`)
+- [x] `openssl x509 -in ansible/pki/ca.pem -noout -text` 顯示 `CA:TRUE`、效期約 10 年 / shows `CA:TRUE`, ~10-year validity
+- [x] `openssl verify -CAfile ansible/pki/ca.pem ansible/pki/leaf/git.home.arpa.pem` 通過 / passes
+- [x] `openssl x509 -in ansible/pki/leaf/git.home.arpa.pem -noout -ext subjectAltName -dates` SAN 是 `DNS:git.home.arpa`、效期 90 天 / SAN is `DNS:git.home.arpa`, 90-day validity
+- [x] VM 上 `/etc/ssl/forgejo/` 權限正確 / correct permissions on the VM
+- [x] VM 上 `openssl x509 -in /usr/local/share/ca-certificates/forgejo-homelab-ca.crt -noout -subject` 確認是我們的 CA / confirms it is our CA
+- [x] `./bin/arun ansible-playbook site.yml` 連跑兩次,第二次 `host_tls` 相關 task 全部 `changed=0` / two consecutive runs, second one reports `changed=0` for all `host_tls` tasks
+- [x] `security find-certificate -c "Forgejo Homelab Root CA" -p login.keychain-db` 在 Mac 上找得到(執行 `02-trust-ca-macos.sh` 之後) / found on the Mac (after running `02-trust-ca-macos.sh`)
 
 ## 工作線 2：nginx 反向代理 + ufw (Work line 2: nginx reverse proxy + ufw)
 
