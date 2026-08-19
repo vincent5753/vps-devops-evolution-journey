@@ -42,8 +42,19 @@
     mode: "0600"     # netplan warns loudly about world-readable configs
   notify: Apply netplan
 
-- name: Drop the DHCP configuration cloud-init left behind
+- name: Drop the netplan files cloud-init left behind
+  # 50-cloud-init.yaml is the DHCP config. 51-no-ipv6.yaml is the baseline's
+  # IPv6-off file, and it has to go for a less obvious reason: it declares the
+  # id cloud-init chose (eth0) while the file above declares 'primary'. Two
+  # ids matching one NIC generate two .network files, netplan does not
+  # complain, and networkd takes whichever sorts first -- eth0 before primary
+  # -- so leaving it behind would quietly put this host back on DHCP at the
+  # next reboot. Nothing is lost by removing it: the template above already
+  # carries accept-ra and link-local.
   ansible.builtin.file:
-    path: /etc/netplan/50-cloud-init.yaml
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /etc/netplan/50-cloud-init.yaml
+    - /etc/netplan/51-no-ipv6.yaml
   notify: Apply netplan

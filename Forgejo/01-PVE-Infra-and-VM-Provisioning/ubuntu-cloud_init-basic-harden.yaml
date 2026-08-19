@@ -87,6 +87,31 @@ write_files:
       findtime = 600
       bantime  = 3600
 
+  # Keep IPv6 off in the network configuration itself, not only in sysctl.
+  # The comment on the IPv6 lines in the sysctl file below explains why the
+  # sysctl does not hold on its own.
+  #
+  # The id must be the one cloud-init itself uses (eth0), because netplan
+  # merges by id: the same id extends cloud-init's own definition, while a
+  # different id generates a second .network file matching the same NIC and
+  # networkd silently takes whichever sorts first. Checked with `netplan
+  # generate` on a throwaway VM before settling on this shape.
+  #
+  # This cannot close the very first boot's window — cloud-init runs after
+  # networkd has already configured the link. It takes effect at the reboot
+  # this file ends with, which shortens the exposure from "until Ansible
+  # first runs" to "until that reboot".
+  - path: /etc/netplan/51-no-ipv6.yaml
+    permissions: "0600"     # netplan warns loudly about world-readable configs
+    owner: root:root
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            accept-ra: false
+            link-local: []
+
   # Kernel parameter hardening
   # The 90- prefix makes these load after the distro defaults (10-*, 50-*),
   # so these values win rather than being overridden.
@@ -102,10 +127,19 @@ write_files:
       net.ipv4.icmp_echo_ignore_broadcasts = 1
       net.ipv4.tcp_syncookies = 1
       # IPv6 off by default: this LAN hands out globally routable SLAAC
-      # addresses and the router does not filter inbound v6, and there is no
-      # v6 NAT to hide behind. It is here rather than in an Ansible node role
-      # because the exposure starts at boot, before Ansible first connects.
-      # A node that needs v6 sets these to 0 in 95-node-role.conf. Reversible.
+      # addresses, the router does not filter inbound v6, and there is no v6
+      # NAT to hide behind.
+      #
+      # These two are NOT enough on their own, and that was measured rather
+      # than assumed: a VM built from this file came up holding a public v6
+      # address while both values below read 1. systemd-networkd writes 0
+      # into the per-interface disable_ipv6 so it can grant a link-local
+      # address, and it runs after systemd-sysctl, so it wins. The netplan
+      # file written above is what actually keeps v6 off; these stay as the
+      # layer covering interfaces networkd does not manage.
+      #
+      # Turning v6 back on for one node therefore takes both layers. Setting
+      # these to 0 in 95-node-role.conf alone will not do it.
       net.ipv6.conf.all.disable_ipv6 = 1
       net.ipv6.conf.default.disable_ipv6 = 1
       # --- Kernel layer ---
@@ -138,7 +172,9 @@ runcmd:
 # if you would rather not reboot.
 power_state:
   mode: reboot
-  delay: "+1"
+  # Integer, not "+1": the string form is deprecated and leaves cloud-init
+  # reporting "degraded", which buries any real warning that shows up later.
+  delay: 1
   message: "cloud-init finished, rebooting"
 
 final_message: "cloud-init finished after $UPTIME seconds"
